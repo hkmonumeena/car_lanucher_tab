@@ -62,4 +62,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.9.0")
     implementation("com.google.code.gson:gson:2.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
+    implementation ("com.github.idapgroup:Snowfall:0.9.10")
+
 }

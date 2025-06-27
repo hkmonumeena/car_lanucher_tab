@@ -3,15 +3,24 @@ package com.ruchitech.carlanuchertab
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
+import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.media.AudioManager
+import android.media.MediaMetadata
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
+import android.view.KeyEvent
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -20,29 +29,24 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
@@ -51,16 +55,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Alignment.Companion.CenterHorizontally
+import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.idapgroup.snowfall.snowfall
+import com.ruchitech.carlanuchertab.clock.AnalogClock
+import com.ruchitech.carlanuchertab.clock.DigitalClock
 
 data class WidgetItem(
     val appWidgetId: Int,
@@ -141,6 +155,13 @@ class MainActivity : ComponentActivity() {
                     "WidgetFlow",
                     "Widget configuration canceled. ResultCode: ${result.resultCode}"
                 )
+                // Optional: Show anyway if configure activity was launched
+                val appWidgetInfo = appWidgetManager.getAppWidgetInfo(currentAppWidgetId)
+                if (appWidgetInfo?.configure != null) {
+                    // Some apps don't return RESULT_OK even when configured
+                    Log.w("WidgetFlow", "Trying to show widget anyway.")
+                    showWidget(currentAppWidgetId)
+                }
             }
         }
 
@@ -222,7 +243,7 @@ class MainActivity : ComponentActivity() {
         appWidgetManager: AppWidgetManager,
         onUpdate: () -> Unit,
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().snowfall(density = 0.02, alpha = 0.4F)) {
             for (item in widgetItems) {
                 key(item.appWidgetId) {
                     DraggableWidget(
@@ -230,21 +251,24 @@ class MainActivity : ComponentActivity() {
                         widgetHost = widgetHost,
                         appWidgetManager = appWidgetManager,
                         onPositionChanged = { newX, newY ->
-                            val index = widgetItems.indexOfFirst { it.appWidgetId == item.appWidgetId }
+                            val index =
+                                widgetItems.indexOfFirst { it.appWidgetId == item.appWidgetId }
                             if (index != -1) {
                                 widgetItems[index] = item.copy(x = newX, y = newY)
                                 onUpdate()
                             }
                         },
                         onSizeChanged = { newWidth, newHeight ->
-                            val index = widgetItems.indexOfFirst { it.appWidgetId == item.appWidgetId }
+                            val index =
+                                widgetItems.indexOfFirst { it.appWidgetId == item.appWidgetId }
                             if (index != -1) {
                                 widgetItems[index] = item.copy(width = newWidth, height = newHeight)
                                 onUpdate()
                             }
                         },
                         onLongPressToRemove = { itemToRemove ->
-                            val index = widgetItems.indexOfFirst { it.appWidgetId == itemToRemove.appWidgetId }
+                            val index =
+                                widgetItems.indexOfFirst { it.appWidgetId == itemToRemove.appWidgetId }
                             if (index != -1) {
                                 widgetHost.deleteAppWidgetId(itemToRemove.appWidgetId)
                                 widgetItems.removeAt(index)
@@ -321,6 +345,62 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun requestNotificationListenerPermission(context: Context) {
+        val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+        context.startActivity(intent)
+    }
+
+
+    fun sendMediaButtonEvent(keyCode: Int) {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        val downEvent = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
+        val upEvent = KeyEvent(KeyEvent.ACTION_UP, keyCode)
+
+        audioManager.dispatchMediaKeyEvent(downEvent)
+        audioManager.dispatchMediaKeyEvent(upEvent)
+    }
+
+    fun isNotificationServiceEnabled(context: Context): Boolean {
+        val pkgName = context.packageName
+        val flat =
+            Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        return flat != null && flat.contains(pkgName)
+    }
+
+    @Composable
+    fun NowPlayingMiniUI(context: Context) {
+        val metadataState = remember { mutableStateOf<MediaMetadata?>(null) }
+
+        // Check for permission
+        LaunchedEffect(Unit) {
+            if (!isNotificationServiceEnabled(context)) {
+                requestNotificationListenerPermission(context)
+            } else {
+                metadataState.value = getActiveMediaMetadata(context)
+            }
+        }
+
+        val metadata = metadataState.value
+
+        Column(
+            modifier = Modifier
+                .background(Color.Red)
+                .padding(16.dp)
+        ) {
+            Text("Now Playing:", color = Color.White)
+            Text(
+                "Title: ${metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "Unknown"}",
+                color = Color.White
+            )
+            Text(
+                "Artist: ${metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "Unknown"}",
+                color = Color.White
+            )
+        }
+    }
+
+
     @Composable
     fun LauncherHomeScreen(
         onAddWidget: () -> Unit,
@@ -330,37 +410,60 @@ class MainActivity : ComponentActivity() {
         onUpdate: () -> Unit,
     ) {
         var showMenu by remember { mutableStateOf(false) }
+        val bottomIcons = listOf(
+            Pair(R.drawable.map, "Map"),
+            Pair(R.drawable.radio, "Radio"),
+            Pair(R.drawable.music, "Music"),
+            Pair(R.drawable.apps, "All apps")
+        )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF121212))
+                .background(Color.Transparent)
         ) {
-            // Background with subtle gradient
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF1E1E1E),
-                                Color(0xFF121212)
-                            ),
-                            startY = 0f,
-                            endY = Float.POSITIVE_INFINITY
-                        )
-                    )
+            Image(
+                painter = painterResource(R.drawable.launcher_bg),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.FillWidth
             )
 
-            // Settings icon in top-right corner
+            Box(modifier = Modifier.align(alignment = Alignment.TopCenter).padding(top = 25.dp)) {
+                //AnalogClock()
+                DigitalClock()
+            }
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 16.dp, end = 16.dp),
-                contentAlignment = Alignment.TopEnd
+                modifier = Modifier.align(alignment = Alignment.TopStart)
+                    .padding(start = 20.dp, top = 30.dp)
+            ) {
+                AnalogClock()
+                Box(modifier = Modifier.align(alignment = Alignment.Center).padding(top = 80.dp)) {
+                    Text(
+                        text = "27 Jun",
+                        style = TextStyle(
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Default,
+                            fontSize = 24.sp
+                        )
+                    )
+                }
+            }
+
+
+            Box(
+                modifier = Modifier.align(alignment = Alignment.TopEnd)
+                    .padding(top = 25.dp, end = 15.dp)
             ) {
                 IconButton(
-                    onClick = { showMenu = true },
+                    onClick = {
+                        //showMenu = true
+                        val intent =
+                            Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                        startActivity(intent) // S
+
+                    },
                     modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
@@ -376,70 +479,10 @@ class MainActivity : ComponentActivity() {
                     onDismissRequest = { showMenu = false },
                     modifier = Modifier.background(Color(0xFF2D2D2D))
                 ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "Add Widget",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            onAddWidget()
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "Remove All Widgets",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            widgetItems.clear()
-                            saveWidgetItems(emptyList())
-                            onUpdate()
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "Edit Widgets",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            // Implement edit functionality here
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
-                    )
+                    // ... (keep your existing dropdown menu items)
                 }
             }
+
 
             // Full-screen widget canvas
             MultiWidgetCanvas(
@@ -447,9 +490,83 @@ class MainActivity : ComponentActivity() {
                 widgetHost = widgetHost,
                 appWidgetManager = appWidgetManager,
                 onUpdate = onUpdate,
+                // modifier = Modifier.padding(bottom = 80.dp) // Add padding to avoid overlap with bottom bar
             )
+
+            // NowPlayingMiniUI(context = LocalContext.current)
+
+            // Bottom icon row
+            //0x99000000
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .wrapContentWidth()
+                    .height(100.dp)
+                    .background(Color(0x00000000)) // Semi-transparent black background
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = CenterVertically
+                ) {
+                    bottomIcons.forEach { (icon, title) ->
+                      /*  IconButton(onClick = {
+                            sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                        }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause")
+                        }*/
+
+                        Column(
+                            horizontalAlignment = CenterHorizontally,
+                            modifier = Modifier
+                                .padding(horizontal = 15.dp)
+                                .width(80.dp)
+                                .clickable {
+                                    // Handle icon click
+                                    when (title) {
+                                        "Settings" -> showMenu = true
+                                        // Add other cases as needed
+                                    }
+                                }
+                        ) {
+                            // Icon with filled white circle and grey border
+                            Box(
+                                modifier = Modifier
+                                    .size(60.dp) // Size of the circle
+                                    .background(
+                                        color = Color.White,
+                                        shape = CircleShape
+                                    )
+                                    .border(
+                                        width = 2.dp,
+                                        color = Color.Red.copy(0.2F),
+                                        shape = CircleShape
+                                    )
+                                    .padding(4.dp), // Padding inside the circle
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = icon),
+                                    contentDescription = title,
+                                    /// colorFilter = ColorFilter.tint(Color.Black),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = title,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
+
+
     override fun onDestroy() {
         super.onDestroy()
         appWidgetHost.stopListening()
