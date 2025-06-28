@@ -5,9 +5,9 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
-import android.content.res.Resources.Theme
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
@@ -16,9 +16,10 @@ import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -27,28 +28,35 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -58,19 +66,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Alignment.Companion.CenterHorizontally
-import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,7 +89,15 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.ruchitech.carlanuchertab.clock.AnalogClock
 import com.ruchitech.carlanuchertab.clock.DigitalClock
+import com.ruchitech.carlanuchertab.helper.BottomNavItem
+import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
+import com.ruchitech.carlanuchertab.helper.getActiveMediaMetadata
+import com.ruchitech.carlanuchertab.helper.getCurrentDateFormatted
+import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
+import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
 import com.ruchitech.carlanuchertab.ui.theme.nonScaledSp
+import kotlinx.datetime.LocalDate
+import java.time.format.DateTimeFormatter
 
 data class WidgetItem(
     val appWidgetId: Int,
@@ -89,6 +105,14 @@ data class WidgetItem(
     val y: Float,
     val width: Int,
     val height: Int,
+)
+
+data class FuelRecord(
+    val id: Int,
+    val date: java.time.LocalDate,
+    val amount: Double, // in liters
+    val cost: Double,   // in currency
+    val mileage: Int    // in km
 )
 
 
@@ -108,9 +132,8 @@ class MainActivity : ComponentActivity() {
 
             if (result.resultCode == RESULT_OK) {
                 val data = result.data
-                val appWidgetId =
-                    data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1)
-                        ?: return@registerForActivityResult
+                val appWidgetId = data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1)
+                    ?: return@registerForActivityResult
 
                 Log.d("WidgetFlow", "Picked widget ID: $appWidgetId")
 
@@ -153,14 +176,12 @@ class MainActivity : ComponentActivity() {
 
             if (result.resultCode == RESULT_OK) {
                 Log.d(
-                    "WidgetFlow",
-                    "Configuration complete. Showing widget ID: $currentAppWidgetId"
+                    "WidgetFlow", "Configuration complete. Showing widget ID: $currentAppWidgetId"
                 )
                 showWidget(currentAppWidgetId)
             } else {
                 Log.w(
-                    "WidgetFlow",
-                    "Widget configuration canceled. ResultCode: ${result.resultCode}"
+                    "WidgetFlow", "Widget configuration canceled. ResultCode: ${result.resultCode}"
                 )
                 // Optional: Show anyway if configure activity was launched
                 val appWidgetInfo = appWidgetManager.getAppWidgetInfo(currentAppWidgetId)
@@ -176,32 +197,24 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
-        window.statusBarColor =resources.getColor(R.color.transparent)
+        window.statusBarColor = resources.getColor(R.color.transparent)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
-
         appWidgetManager = AppWidgetManager.getInstance(this)
         appWidgetHost = AppWidgetHost(this, APPWIDGET_HOST_ID)
         appWidgetHost.startListening()
         widgetItems.addAll(loadWidgetItems())
         setContent {
-                 val fixedDensity = Density(
-                     density = 0f,
-                     fontScale = 0f
-                 ) // You can also use 2f to simulate 2x density (e.g. mdpi, hdpi)
-                 CompositionLocalProvider(LocalDensity provides fixedDensity) {
-                     MaterialTheme {
-                         Surface(modifier = Modifier.fillMaxSize()) {
-                             LauncherHomeScreen(
-                                 onAddWidget = { launchWidgetPicker() },
-                                 widgetItems = widgetItems,
-                                 appWidgetManager = appWidgetManager,
-                                 widgetHost = appWidgetHost,
-                                 onUpdate = { saveWidgetItems(widgetItems) }
-                             )
-                         }
-                     }
+            MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    LauncherHomeScreen(
+                        onAddWidget = { launchWidgetPicker() },
+                        widgetItems = widgetItems,
+                        appWidgetManager = appWidgetManager,
+                        widgetHost = appWidgetHost,
+                        onUpdate = { saveWidgetItems(widgetItems) })
+                }
+            }
 
-                 }
         }
     }
 
@@ -230,11 +243,7 @@ class MainActivity : ComponentActivity() {
 
         widgetItems.add(
             WidgetItem(
-                appWidgetId = appWidgetId,
-                x = 0f,
-                y = 0f,
-                width = 400,
-                height = 400
+                appWidgetId = appWidgetId, x = 0f, y = 0f, width = 400, height = 400
             )
         )
         saveWidgetItems(widgetItems)
@@ -242,13 +251,11 @@ class MainActivity : ComponentActivity() {
 
     fun saveWidgetItems(items: List<WidgetItem>) {
         val json = Gson().toJson(items)
-        getSharedPreferences("widgets", MODE_PRIVATE).edit()
-            .putString("widget_items", json).apply()
+        getSharedPreferences("widgets", MODE_PRIVATE).edit().putString("widget_items", json).apply()
     }
 
     fun loadWidgetItems(): List<WidgetItem> {
-        val json = getSharedPreferences("widgets", MODE_PRIVATE)
-            .getString("widget_items", "[]")
+        val json = getSharedPreferences("widgets", MODE_PRIVATE).getString("widget_items", "[]")
         return Gson().fromJson(json, object : TypeToken<List<WidgetItem>>() {}.type)
     }
 
@@ -290,8 +297,7 @@ class MainActivity : ComponentActivity() {
                                 widgetItems.removeAt(index)
                                 onUpdate()
                             }
-                        }
-                    )
+                        })
                 }
             }
         }
@@ -312,42 +318,31 @@ class MainActivity : ComponentActivity() {
         var widgetWidth by remember { mutableStateOf(item.width) }
         var widgetHeight by remember { mutableStateOf(item.height) }
 
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onLongPress = {
-                            onLongPressToRemove(item)
-                        }
-                    )
+        Box(modifier = Modifier.offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        onLongPressToRemove(item)
+                    })
+            }) {
+            AndroidView(factory = {
+                val info = appWidgetManager.getAppWidgetInfo(item.appWidgetId)
+                widgetHost.createView(context, item.appWidgetId, info).apply {
+                    setAppWidget(item.appWidgetId, info)
+                    layoutParams = FrameLayout.LayoutParams(widgetWidth, widgetHeight)
                 }
-        ) {
-            AndroidView(
-                factory = {
-                    val info = appWidgetManager.getAppWidgetInfo(item.appWidgetId)
-                    widgetHost.createView(context, item.appWidgetId, info).apply {
-                        setAppWidget(item.appWidgetId, info)
-                        layoutParams = FrameLayout.LayoutParams(widgetWidth, widgetHeight)
+            }, modifier = Modifier.size(widgetWidth.dp, widgetHeight.dp).pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        offsetX += dragAmount.x
+                        offsetY += dragAmount.y
+                        onPositionChanged(offsetX, offsetY)
                     }
-                },
-                modifier = Modifier
-                    .size(widgetWidth.dp, widgetHeight.dp)
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            offsetX += dragAmount.x
-                            offsetY += dragAmount.y
-                            onPositionChanged(offsetX, offsetY)
-                        }
-                    }
-            )
+                })
 
             // Bottom-right resize handle
             Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .align(Alignment.BottomEnd)
+                modifier = Modifier.size(24.dp).align(Alignment.BottomEnd)
                     .background(Color.Gray.copy(alpha = 0.6f), shape = CircleShape)
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
@@ -356,8 +351,7 @@ class MainActivity : ComponentActivity() {
                             widgetHeight = (widgetHeight + dragAmount.y).toInt().coerceAtLeast(100)
                             onSizeChanged(widgetWidth, widgetHeight)
                         }
-                    }
-            )
+                    })
         }
     }
 
@@ -368,7 +362,7 @@ class MainActivity : ComponentActivity() {
 
 
     fun sendMediaButtonEvent(keyCode: Int) {
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
 
         val downEvent = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
         val upEvent = KeyEvent(KeyEvent.ACTION_UP, keyCode)
@@ -400,9 +394,7 @@ class MainActivity : ComponentActivity() {
         val metadata = metadataState.value
 
         Column(
-            modifier = Modifier
-                .background(Color.Red)
-                .padding(16.dp)
+            modifier = Modifier.background(Color.Red).padding(16.dp)
         ) {
             Text("Now Playing:", color = Color.White)
             Text(
@@ -417,6 +409,162 @@ class MainActivity : ComponentActivity() {
     }
 
 
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    @Composable
+    fun FuelHistoryRoad() {
+        // Sample data - in a real app this would come from a database
+        val fuelRecords = remember {
+            listOf(
+                FuelRecord(1, java.time.LocalDate.now(), 42.3, 3500.0, 24500),
+                FuelRecord(2, java.time.LocalDate.now().minusDays(4), 38.7, 3200.0, 24100),
+                FuelRecord(3, java.time.LocalDate.now().minusDays(7), 40.2, 3300.0, 23700),
+                FuelRecord(4, java.time.LocalDate.now().minusDays(10), 39.5, 3250.0, 23300),
+                FuelRecord(5, java.time.LocalDate.now().minusDays(10), 39.5, 3250.0, 23300),
+                FuelRecord(6, java.time.LocalDate.now().minusDays(10), 39.5, 3250.0, 23300),
+                FuelRecord(7, java.time.LocalDate.now().minusDays(10), 39.5, 3250.0, 23300),
+            )
+        }
+
+        // State for the next predicted filling
+        val predictedAmount by remember { mutableStateOf(41.0) }
+        val predictedCost by remember { mutableStateOf(3400.0) }
+
+        // Road dimensions
+        val roadWidth = 100.dp
+        val roadColor = Color(0xFF444444)
+        val roadLineColor = Color(0xFFFFD700) // gold/yellow for road markings
+
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(roadWidth)
+                .background(roadColor)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp),
+            verticalArrangement = Arrangement.Bottom
+        ) {
+            // Upcoming filling (at the top)
+            FuelRoadItem(
+                isNext = true,
+                date = "Next",
+                amount = predictedAmount,
+                cost = predictedCost,
+                modifier = Modifier.padding(bottom = 32.dp)
+            )
+
+            // Road markings (dashed lines)
+            repeat(3) {
+                RoadMarking()
+            }
+
+            // Past fillings (most recent first)
+            fuelRecords.forEach { record ->
+                FuelRoadItem(
+                    isNext = false,
+                    date = record.date.format(DateTimeFormatter.ofPattern("dd MMM")),
+                    amount = record.amount,
+                    cost = record.cost,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+
+                RoadMarking()
+            }
+
+            // Start of the road (bottom)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(roadLineColor)
+            )
+        }
+    }
+
+    @Composable
+    fun RoadMarking() {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .background(Color.Transparent)
+        ) {
+            // Dashed line in the middle
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val dashWidth = 8.dp.toPx()
+                val dashHeight = 2.dp.toPx()
+                val gap = 8.dp.toPx()
+
+                var startX = 0f
+                while (startX < size.width) {
+                    drawRect(
+                        color = Color(0xFFFFD700),
+                        topLeft = Offset(startX, size.height / 2 - dashHeight / 2),
+                        size = Size(dashWidth, dashHeight)
+                    )
+                    startX += dashWidth + gap
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun FuelRoadItem(
+        isNext: Boolean,
+        date: String,
+        amount: Double,
+        cost: Double,
+        modifier: Modifier = Modifier
+    ) {
+        val backgroundColor = if (isNext) Color(0xFF4CAF50) else Color(0xFF2196F3)
+        val textColor = Color.White
+
+        Box(
+            modifier = modifier
+                .width(80.dp)  // Fixed width for compactness
+                .height(40.dp) // Fixed height
+                .background(backgroundColor, RoundedCornerShape(20.dp))
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Left side - Date
+                Text(
+                    text = date,
+                    color = textColor,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // Right side - Amount and Cost stacked vertically
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.width(30.dp)
+                ) {
+                    Text(
+                        text = "${amount.toInt()}L",
+                        color = textColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "₹${cost.toInt()}",
+                        color = textColor.copy(alpha = 0.8f),
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun LauncherHomeScreen(
         onAddWidget: () -> Unit,
@@ -426,43 +574,48 @@ class MainActivity : ComponentActivity() {
         onUpdate: () -> Unit,
     ) {
         var showMenu by remember { mutableStateOf(false) }
-        val bottomIcons = listOf(
-            Pair(R.drawable.map, "Map"),
-            Pair(R.drawable.radio, "Radio"),
-            Pair(R.drawable.music, "Music"),
-            Pair(R.drawable.apps, "All apps")
+        var showWallpaperSheet by remember { mutableStateOf(false) }
+        var currentWallpaper by remember { mutableStateOf(R.drawable.launcher_bg7) }
+
+        // Wallpaper options
+        val wallpapers = listOf(
+            R.drawable.launcher_bg1,
+            R.drawable.launcher_bg2,
+            R.drawable.launcher_bg3,
+            R.drawable.launcher_bg4,
+            R.drawable.launcher_bg5,
+            R.drawable.launcher_bg6,
+            R.drawable.launcher_bg7,
+            R.drawable.launcher_bg8,
         )
 
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Transparent)
+            modifier = Modifier.fillMaxSize().background(Color.Transparent)
         ) {
             Image(
-                painter = painterResource(R.drawable.launcher_bg),
+                painter = painterResource(currentWallpaper),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .align(Alignment.Center),
                 contentScale = ContentScale.FillWidth
             )
 
-            Box(modifier = Modifier
-                .align(alignment = Alignment.TopCenter)
-                .padding(top = 25.dp)) {
-                //AnalogClock()
-                DigitalClock()
+            Box(
+                modifier = Modifier.align(alignment = Alignment.CenterEnd)
+            ) {
+                FuelHistoryRoad()
             }
             Box(
-                modifier = Modifier
-                    .align(alignment = Alignment.TopStart)
+                modifier = Modifier.align(alignment = Alignment.TopStart)
                     .padding(start = 50.dp, top = 30.dp)
             ) {
                 AnalogClock()
-                Box(modifier = Modifier
-                    .align(alignment = Alignment.Center)
-                    .padding(top = 80.dp)) {
+                Box(
+                    modifier = Modifier.align(alignment = Alignment.Center).padding(top = 80.dp)
+                ) {
                     Text(
-                        text = "27 Jun",
-                        style = TextStyle(
+                        text = getCurrentDateFormatted(), style = TextStyle(
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Default,
@@ -474,19 +627,14 @@ class MainActivity : ComponentActivity() {
 
 
             Box(
-                modifier = Modifier
-                    .align(alignment = Alignment.TopEnd)
+                modifier = Modifier.align(alignment = Alignment.TopEnd)
                     .padding(top = 25.dp, end = 15.dp)
             ) {
                 IconButton(
                     onClick = {
                         showMenu = true
-            /*            val intent =
-                            Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                        startActivity(intent) // S*/
 
-                    },
-                    modifier = Modifier.size(48.dp)
+                    }, modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
@@ -496,76 +644,74 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                DropdownMenu(
+                WidgetsDropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
-                    modifier = Modifier.background(Color(0xFF2D2D2D))
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "Add Widget",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            onAddWidget()
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
+                    onMenuAction = { action ->
+                        when (action) {
+                            is WidgetMenuAction.AddWidget -> onAddWidget()
+                            is WidgetMenuAction.RemoveAllWidgets -> {
+                                widgetItems.clear()
+                                saveWidgetItems(emptyList())
+                                onUpdate()
+                            }
+                            is WidgetMenuAction.EditWidgets -> {
+                                // Open wallpaper selector
+                                showWallpaperSheet = true
+                            }
                         }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "Remove All Widgets",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            widgetItems.clear()
-                            saveWidgetItems(emptyList())
-                            onUpdate()
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "Edit Widgets",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            // Implement edit functionality here
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
-                    )
-                }
-            }
+                    }
+                )
 
+                // Wallpaper Selection Bottom Sheet
+                if (showWallpaperSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showWallpaperSheet = false },
+                        sheetState = rememberModalBottomSheetState(),
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = Color(0xFF2D2D2D)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Text(
+                                "Select Wallpaper",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            )
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(wallpapers) { wallpaper ->
+                                    Card(
+                                        modifier = Modifier
+                                            .padding(8.dp)
+                                            .aspectRatio(1f)
+                                            .clickable {
+                                                currentWallpaper = wallpaper
+                                                showWallpaperSheet = false
+                                            },
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Image(
+                                            painter = painterResource(wallpaper),
+                                            contentDescription = "Wallpaper",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
 
             // Full-screen widget canvas
             MultiWidgetCanvas(
@@ -576,81 +722,25 @@ class MainActivity : ComponentActivity() {
                 // modifier = Modifier.padding(bottom = 80.dp) // Add padding to avoid overlap with bottom bar
             )
 
-            // NowPlayingMiniUI(context = LocalContext.current)
-
-            // Bottom icon row
-            //0x99000000
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .wrapContentWidth()
-                    .height(100.dp)
+                modifier = Modifier.align(Alignment.BottomCenter).wrapContentWidth().height(100.dp)
                     .background(Color(0x00000000)) // Semi-transparent black background
             ) {
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = CenterVertically
-                ) {
-                    bottomIcons.forEach { (icon, title) ->
-                        /*  IconButton(onClick = {
-                              sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                          }) {
-                              Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause")
-                          }*/
-
-                        Column(
-                            horizontalAlignment = CenterHorizontally,
-                            modifier = Modifier
-                                .padding(horizontal = 15.dp)
-                                .width(80.dp)
-                                .clickable {
-                                    // Handle icon click
-                                    when (title) {
-                                        "Settings" -> showMenu = true
-                                        "All apps" -> startActivity(
-                                            Intent(
-                                                this@MainActivity,
-                                                AppsActivity::class.java
-                                            )
-                                        )
-                                        // Add other cases as needed
-                                    }
-                                }
-                        ) {
-                            // Icon with filled white circle and grey border
-                            Box(
-                                modifier = Modifier
-                                    .size(60.dp) // Size of the circle
-                                    .background(
-                                        color = Color.White,
-                                        shape = CircleShape
-                                    )
-                                    .border(
-                                        width = 2.dp,
-                                        color = Color.Red.copy(0.2F),
-                                        shape = CircleShape
-                                    )
-                                    .padding(4.dp), // Padding inside the circle
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    painter = painterResource(id = icon),
-                                    contentDescription = title,
-                                    /// colorFilter = ColorFilter.tint(Color.Black),
-                                    modifier = Modifier.size(24.dp)
+                HomeBottomIcons(onClick = { bottomNavItem ->
+                    when (bottomNavItem) {
+                        is BottomNavItem.Map -> Unit
+                        is BottomNavItem.Radio -> Unit
+                        is BottomNavItem.Music -> Unit
+                        is BottomNavItem.AllApps -> {
+                            startActivity(
+                                Intent(
+                                    this@MainActivity, AppsActivity::class.java
                                 )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = title,
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall
                             )
                         }
                     }
-                }
+
+                })
             }
         }
     }

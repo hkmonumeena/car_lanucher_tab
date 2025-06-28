@@ -1,13 +1,15 @@
-package com.ruchitech.carlanuchertab
+package com.ruchitech.carlanuchertab.helper
 
 import android.content.ComponentName
 import android.content.Context
 import android.media.MediaMetadata
-import android.media.session.MediaController
 import android.media.session.MediaSessionManager
-import android.os.Build
-import android.service.notification.NotificationListenerService
+import android.media.session.PlaybackState
 import android.util.Log
+import com.ruchitech.carlanuchertab.YourNotificationListenerService
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 fun getActiveMediaMetadata(context: Context): MediaMetadata? {
     val mediaSessionManager =
@@ -21,7 +23,7 @@ fun getActiveMediaMetadata(context: Context): MediaMetadata? {
         val playbackState = controller.playbackState
         val metadata = controller.metadata
         if (playbackState != null &&
-            playbackState.state == android.media.session.PlaybackState.STATE_PLAYING &&
+            playbackState.state == PlaybackState.STATE_PLAYING &&
             metadata != null
         ) {
             Log.d("MediaMetadata", "Now playing: ${metadata.description.title}")
@@ -32,3 +34,7 @@ fun getActiveMediaMetadata(context: Context): MediaMetadata? {
     return null
 }
 
+fun getCurrentDateFormatted(): String {
+    val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
+    return dateFormat.format(Date())
+}
