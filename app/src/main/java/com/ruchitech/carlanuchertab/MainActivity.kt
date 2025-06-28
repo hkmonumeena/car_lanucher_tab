@@ -5,14 +5,13 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
+import android.content.res.Resources.Theme
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
-import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -37,15 +36,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -62,19 +65,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.idapgroup.snowfall.snowfall
 import com.ruchitech.carlanuchertab.clock.AnalogClock
 import com.ruchitech.carlanuchertab.clock.DigitalClock
+import com.ruchitech.carlanuchertab.ui.theme.nonScaledSp
 
 data class WidgetItem(
     val appWidgetId: Int,
@@ -168,24 +175,33 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        window.statusBarColor =resources.getColor(R.color.transparent)
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
 
         appWidgetManager = AppWidgetManager.getInstance(this)
         appWidgetHost = AppWidgetHost(this, APPWIDGET_HOST_ID)
         appWidgetHost.startListening()
-// Restore previously added widget
         widgetItems.addAll(loadWidgetItems())
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    LauncherHomeScreen(
-                        onAddWidget = { launchWidgetPicker() },
-                        widgetItems = widgetItems,
-                        appWidgetManager = appWidgetManager,
-                        widgetHost = appWidgetHost,
-                        onUpdate = { saveWidgetItems(widgetItems) }
-                    )
-                }
-            }
+                 val fixedDensity = Density(
+                     density = 0f,
+                     fontScale = 0f
+                 ) // You can also use 2f to simulate 2x density (e.g. mdpi, hdpi)
+                 CompositionLocalProvider(LocalDensity provides fixedDensity) {
+                     MaterialTheme {
+                         Surface(modifier = Modifier.fillMaxSize()) {
+                             LauncherHomeScreen(
+                                 onAddWidget = { launchWidgetPicker() },
+                                 widgetItems = widgetItems,
+                                 appWidgetManager = appWidgetManager,
+                                 widgetHost = appWidgetHost,
+                                 onUpdate = { saveWidgetItems(widgetItems) }
+                             )
+                         }
+                     }
+
+                 }
         }
     }
 
@@ -243,7 +259,7 @@ class MainActivity : ComponentActivity() {
         appWidgetManager: AppWidgetManager,
         onUpdate: () -> Unit,
     ) {
-        Box(modifier = Modifier.fillMaxSize().snowfall(density = 0.02, alpha = 0.4F)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             for (item in widgetItems) {
                 key(item.appWidgetId) {
                     DraggableWidget(
@@ -288,7 +304,7 @@ class MainActivity : ComponentActivity() {
         appWidgetManager: AppWidgetManager,
         onPositionChanged: (Float, Float) -> Unit,
         onLongPressToRemove: (WidgetItem) -> Unit,
-        onSizeChanged: (Int, Int) -> Unit
+        onSizeChanged: (Int, Int) -> Unit,
     ) {
         val context = LocalContext.current
         var offsetX by remember { mutableStateOf(item.x) }
@@ -429,23 +445,28 @@ class MainActivity : ComponentActivity() {
                 contentScale = ContentScale.FillWidth
             )
 
-            Box(modifier = Modifier.align(alignment = Alignment.TopCenter).padding(top = 25.dp)) {
+            Box(modifier = Modifier
+                .align(alignment = Alignment.TopCenter)
+                .padding(top = 25.dp)) {
                 //AnalogClock()
                 DigitalClock()
             }
             Box(
-                modifier = Modifier.align(alignment = Alignment.TopStart)
-                    .padding(start = 20.dp, top = 30.dp)
+                modifier = Modifier
+                    .align(alignment = Alignment.TopStart)
+                    .padding(start = 50.dp, top = 30.dp)
             ) {
                 AnalogClock()
-                Box(modifier = Modifier.align(alignment = Alignment.Center).padding(top = 80.dp)) {
+                Box(modifier = Modifier
+                    .align(alignment = Alignment.Center)
+                    .padding(top = 80.dp)) {
                     Text(
                         text = "27 Jun",
                         style = TextStyle(
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Default,
-                            fontSize = 24.sp
+                            fontSize = 24.sp.nonScaledSp
                         )
                     )
                 }
@@ -453,15 +474,16 @@ class MainActivity : ComponentActivity() {
 
 
             Box(
-                modifier = Modifier.align(alignment = Alignment.TopEnd)
+                modifier = Modifier
+                    .align(alignment = Alignment.TopEnd)
                     .padding(top = 25.dp, end = 15.dp)
             ) {
                 IconButton(
                     onClick = {
-                        //showMenu = true
-                        val intent =
+                        showMenu = true
+            /*            val intent =
                             Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                        startActivity(intent) // S
+                        startActivity(intent) // S*/
 
                     },
                     modifier = Modifier.size(48.dp)
@@ -479,7 +501,68 @@ class MainActivity : ComponentActivity() {
                     onDismissRequest = { showMenu = false },
                     modifier = Modifier.background(Color(0xFF2D2D2D))
                 ) {
-                    // ... (keep your existing dropdown menu items)
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "Add Widget",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onAddWidget()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "Remove All Widgets",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            widgetItems.clear()
+                            saveWidgetItems(emptyList())
+                            onUpdate()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "Edit Widgets",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            // Implement edit functionality here
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                        }
+                    )
                 }
             }
 
@@ -511,11 +594,11 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = CenterVertically
                 ) {
                     bottomIcons.forEach { (icon, title) ->
-                      /*  IconButton(onClick = {
-                            sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                        }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause")
-                        }*/
+                        /*  IconButton(onClick = {
+                              sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                          }) {
+                              Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause")
+                          }*/
 
                         Column(
                             horizontalAlignment = CenterHorizontally,
@@ -526,6 +609,12 @@ class MainActivity : ComponentActivity() {
                                     // Handle icon click
                                     when (title) {
                                         "Settings" -> showMenu = true
+                                        "All apps" -> startActivity(
+                                            Intent(
+                                                this@MainActivity,
+                                                AppsActivity::class.java
+                                            )
+                                        )
                                         // Add other cases as needed
                                     }
                                 }

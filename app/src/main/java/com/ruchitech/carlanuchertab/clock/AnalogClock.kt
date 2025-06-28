@@ -31,7 +31,7 @@ import kotlinx.datetime.toLocalDateTime
 @Composable
 fun AnalogClock() {
     Box(
-        modifier = Modifier.size(200.dp),
+        modifier = Modifier.size(225.dp),
         contentAlignment = Alignment.Center
     ) {
         var time by remember {
@@ -99,8 +99,8 @@ fun AnalogClock() {
                     drawLine(
                         color = Color.White,
                         start = Offset(size.width / 2, 0f),
-                        end = Offset(size.width / 2, 40f),
-                        strokeWidth = 8f
+                        end = Offset(size.width / 2, 18f),
+                        strokeWidth = 5f
                     )
                 }
             }
@@ -118,7 +118,7 @@ fun AnalogClock() {
             rotate(degrees = time.hour , pivot = Offset(size.width / 2, size.height / 2)) {
                 val center = Offset(size.width / 2, size.height / 2)
 
-                val handLength = size.minDimension / 3
+                val handLength = size.minDimension / 4
                 val handWidth = 15f
 
                 val path = Path().apply {
@@ -138,12 +138,12 @@ fun AnalogClock() {
             rotate(degrees = smoothMinuteAngle, pivot = Offset(size.width / 2, size.height / 2)) {
                 val center = Offset(size.width / 2, size.height / 2)
                 val handLength = size.minDimension / 2.4f  // slightly shorter
-                val handWidth = 12f                        // slightly wider
+                val handWidth = 6f                        // slightly wider
 
                 val path = Path().apply {
                     moveTo(center.x, center.y - handLength) // Tip (outer side)
-                    lineTo(center.x - handWidth, center.y + 10f)  // Lower left
-                    lineTo(center.x + handWidth, center.y + 10f)  // Lower right
+                    lineTo(center.x - handWidth, center.y + 5f)  // Lower left
+                    lineTo(center.x + handWidth, center.y + 5f)  // Lower right
                     close()
                 }
 
@@ -153,7 +153,7 @@ fun AnalogClock() {
 
             val center = Offset(size.width / 2, size.height / 2)
             val handLength = size.minDimension / 2.1f
-            val handWidth = 4f
+            val handWidth = 6f
 
             rotate(degrees = time.second , pivot = center) {
                 val path = Path().apply {
@@ -163,13 +163,13 @@ fun AnalogClock() {
                     close()
                 }
 
-                drawPath(path, color = Color.Red)
+                drawPath(path, color = Color(0xFFD50000))
             }
 
 
             drawCircle(
                 color = Color.White,
-                radius = 20f
+                radius = 12f
             )
         }
     }
