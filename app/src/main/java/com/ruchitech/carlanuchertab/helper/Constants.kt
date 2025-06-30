@@ -21,6 +21,9 @@ sealed class WidgetMenuAction {
     object AddWidget : WidgetMenuAction()
     object RemoveAllWidgets : WidgetMenuAction()
     object EditWidgets : WidgetMenuAction()
+    object Wallpapers : WidgetMenuAction()
+    object Fuel : WidgetMenuAction()
+    object Snowfall : WidgetMenuAction()
 
     companion object {
         val allActions = listOf(AddWidget, RemoveAllWidgets, EditWidgets)

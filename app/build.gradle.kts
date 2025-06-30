@@ -4,11 +4,14 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlinx.serialization)
+    id("kotlin-kapt")
+
 }
 
 android {
     namespace = "com.ruchitech.carlanuchertab"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.ruchitech.carlanuchertab"
@@ -66,6 +69,17 @@ dependencies {
     implementation("com.google.android.material:material:1.9.0")
     implementation("com.google.code.gson:gson:2.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
-  //  implementation ("com.github.idapgroup:Snowfall:0.9.10")
+  implementation ("com.github.idapgroup:Snowfall:0.9.10")
+  //  implementation(libs.kotlinx.serialization.json)
+    // Room components
+    implementation ("androidx.room:room-runtime:2.6.1")
+    kapt ("androidx.room:room-compiler:2.6.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.9.0")
+// Optional - Kotlin Extensions and Coroutines support
+    implementation ("androidx.room:room-ktx:2.6.1")
 
+}
+// Add this to enable annotation processing with Hilt
+kapt {
+    correctErrorTypes = true
 }

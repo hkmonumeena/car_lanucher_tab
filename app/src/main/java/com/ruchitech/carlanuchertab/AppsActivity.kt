@@ -3,6 +3,7 @@ package com.ruchitech.carlanuchertab
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -213,26 +214,25 @@ suspend fun getInstalledApps(context: Context): List<AppInfo> = withContext(Disp
     val packageManager = context.packageManager
     val apps = mutableListOf<AppInfo>()
 
-    val intent = Intent(Intent.ACTION_MAIN, null).apply {
+    // Get all launcher activities
+    val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
         addCategory(Intent.CATEGORY_LAUNCHER)
     }
+    val launcherPackages = packageManager.queryIntentActivities(launcherIntent, 0)
+        .map { it.activityInfo.packageName }
+        .toSet()
 
-    val resolveInfos = packageManager.queryIntentActivities(intent, 0)
+    // Get all installed applications
+    val installedApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
 
-    for (resolveInfo in resolveInfos) {
-        val activityInfo = resolveInfo.activityInfo
-        val appInfo = activityInfo.applicationInfo
-
-        // Exclude system apps
-        if ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0) {
-            val appName = appInfo.loadLabel(packageManager).toString()
-            val icon = appInfo.loadIcon(packageManager)
-            val packageName = appInfo.packageName
+    for (appInfo in installedApps) {
+        // Include if it's either a launcher app or a non-system app
+        if (appInfo.packageName in launcherPackages || (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0) {
             apps.add(
                 AppInfo(
-                    name = appName,
-                    packageName = packageName,
-                    icon = icon
+                    name = appInfo.loadLabel(packageManager).toString(),
+                    packageName = appInfo.packageName,
+                    icon = appInfo.loadIcon(packageManager)
                 )
             )
         }

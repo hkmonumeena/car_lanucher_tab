@@ -30,6 +30,11 @@ fun WidgetsDropdownMenu(
             action = WidgetMenuAction.AddWidget
         ),
         MenuItem(
+            text = "Edit Widget",
+            icon = Icons.Default.Add,
+            action = WidgetMenuAction.EditWidgets
+        ),
+        MenuItem(
             text = "Remove All Widgets",
             icon = Icons.Default.Delete,
             action = WidgetMenuAction.RemoveAllWidgets
@@ -37,7 +42,17 @@ fun WidgetsDropdownMenu(
         MenuItem(
             text = "Wallpapers",
             icon = Icons.Default.Edit,
-            action = WidgetMenuAction.EditWidgets
+            action = WidgetMenuAction.Wallpapers
+        ) ,
+        MenuItem(
+            text = "Fuel",
+            icon = Icons.Default.Edit,
+            action = WidgetMenuAction.Fuel
+        ) ,
+        MenuItem(
+            text = "Snowfall",
+            icon = Icons.Default.Edit,
+            action = WidgetMenuAction.Snowfall
         )
     )
 

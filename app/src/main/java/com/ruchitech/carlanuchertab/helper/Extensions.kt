@@ -7,6 +7,7 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.util.Log
 import com.ruchitech.carlanuchertab.YourNotificationListenerService
+import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,4 +38,42 @@ fun getActiveMediaMetadata(context: Context): MediaMetadata? {
 fun getCurrentDateFormatted(): String {
     val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
     return dateFormat.format(Date())
+}
+
+fun createFuelLogEntry(
+    rupeeInput: Int?,
+    fuelPriceInput: Float?,
+    litersInput: Float?,
+    location: String? = null
+): FuelLog? {
+    var rupee = rupeeInput
+    var liters = litersInput
+    var price = fuelPriceInput
+
+    when {
+        // Case 1: Calculate liters
+        rupee != null && price != null && liters == null -> {
+            liters = rupee / price
+        }
+
+        // Case 2: Calculate rupees
+        liters != null && price != null && rupee == null -> {
+            rupee = (liters * price).toInt()
+        }
+
+        // ✅ Case 3: Calculate price
+        liters != null && rupee != null && price == null -> {
+            price = rupee / liters
+        }
+
+        // ❌ Case 4: Invalid if rupee is completely missing
+        rupee == null -> return null
+    }
+
+    return FuelLog(
+        rupee = rupee?:0,
+        liters = liters,
+        fuelPrice = price,
+        location = location
+    )
 }

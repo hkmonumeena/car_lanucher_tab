@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,7 +29,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -46,8 +47,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,6 +62,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,7 +70,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -85,19 +89,24 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.idapgroup.snowfall.snowfall
 import com.ruchitech.carlanuchertab.clock.AnalogClock
-import com.ruchitech.carlanuchertab.clock.DigitalClock
 import com.ruchitech.carlanuchertab.helper.BottomNavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.helper.getActiveMediaMetadata
 import com.ruchitech.carlanuchertab.helper.getCurrentDateFormatted
+import com.ruchitech.carlanuchertab.roomdb.action.AppDatabase
+import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
+import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
+import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
 import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
 import com.ruchitech.carlanuchertab.ui.theme.nonScaledSp
-import kotlinx.datetime.LocalDate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
+
 
 data class WidgetItem(
     val appWidgetId: Int,
@@ -112,19 +121,23 @@ data class FuelRecord(
     val date: java.time.LocalDate,
     val amount: Double, // in liters
     val cost: Double,   // in currency
-    val mileage: Int    // in km
+    val mileage: Int,    // in km
 )
 
 
 class MainActivity : ComponentActivity() {
     val widgetItems = mutableStateListOf<WidgetItem>()
+    var editWidgets by mutableStateOf(false)
+    var isSnowfalll by mutableStateOf(false)
+    var setWallpaper by mutableStateOf(R.drawable.launcher_bg7)
 
     private lateinit var appWidgetManager: AppWidgetManager
     private lateinit var appWidgetHost: AppWidgetHost
-
     private val APPWIDGET_HOST_ID = 1024
-
     private var currentAppWidgetId = -1
+    private lateinit var appDatabase: AppDatabase
+    private lateinit var dashboardDao: DashboardDao
+
 
     private val pickWidget =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -169,7 +182,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-
     private val configureWidget =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             Log.d("WidgetFlow", "Widget Config Result: $result")
@@ -193,20 +205,31 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         window.statusBarColor = resources.getColor(R.color.transparent)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
+        val db = AppDatabase.getDatabase(this)
+        dashboardDao = db.dashboardDao()
         appWidgetManager = AppWidgetManager.getInstance(this)
         appWidgetHost = AppWidgetHost(this, APPWIDGET_HOST_ID)
         appWidgetHost.startListening()
-        widgetItems.addAll(loadWidgetItems())
+        CoroutineScope(Dispatchers.IO).launch {
+            val dashboard = dashboardDao.getDashboard()
+            if (dashboard != null) {
+                setWallpaper = dashboard.wallpaperId
+                widgetItems.addAll(dashboard.widgets)
+                isSnowfalll = dashboard.isSnowfall ?: false
+            }
+        }
+        //   widgetItems.addAll(loadWidgetItems())
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     LauncherHomeScreen(
+                        wallpaper = setWallpaper,
                         onAddWidget = { launchWidgetPicker() },
                         widgetItems = widgetItems,
                         appWidgetManager = appWidgetManager,
@@ -234,30 +257,58 @@ class MainActivity : ComponentActivity() {
 
     private fun showWidget(appWidgetId: Int) {
         Log.e("showWidget", "Showing widget: $appWidgetId")
+        CoroutineScope(Dispatchers.IO).launch {
+            val info = appWidgetManager.getAppWidgetInfo(appWidgetId)
+            val dashboardData = dashboardDao.getDashboard()
+            if (info == null) {
+                Log.e("showWidget", "AppWidgetInfo is null for ID: $appWidgetId")
+                if (dashboardData != null) {
+                    deleteWidget(appWidgetId)
+                }
+                return@launch
+            }
 
-        val info = appWidgetManager.getAppWidgetInfo(appWidgetId)
-        if (info == null) {
-            Log.e("showWidget", "AppWidgetInfo is null for ID: $appWidgetId")
-            return
-        }
-
-        widgetItems.add(
-            WidgetItem(
+            val widgetItem = WidgetItem(
                 appWidgetId = appWidgetId, x = 0f, y = 0f, width = 400, height = 400
             )
-        )
-        saveWidgetItems(widgetItems)
+
+            if (dashboardData != null) {
+                val updatedWidgets = dashboardData.widgets.toMutableList().apply {
+                    add(widgetItem)
+                }
+                val updatedDashboard = dashboardData.copy(widgets = updatedWidgets)
+                dashboardDao.updateDashboard(updatedDashboard)
+            } else {
+                dashboardDao.insertOrUpdateDashboard(Dashboard(widgets = listOf(widgetItem)))
+            }
+            widgetItems.add(widgetItem)
+        }
+        //saveWidgetItems(widgetItems)
     }
+
+    suspend fun deleteWidget(widgetId: Int) {
+        val dashboard = dashboardDao.getDashboard()
+        if (dashboard != null) {
+            val updatedWidgets = dashboard.widgets.filter { it.appWidgetId != widgetId }
+            val updatedDashboard = dashboard.copy(widgets = updatedWidgets)
+            dashboardDao.updateDashboard(updatedDashboard)
+            widgetItems.clear()
+            widgetItems.addAll(updatedWidgets)
+        }
+    }
+
 
     fun saveWidgetItems(items: List<WidgetItem>) {
-        val json = Gson().toJson(items)
-        getSharedPreferences("widgets", MODE_PRIVATE).edit().putString("widget_items", json).apply()
+        CoroutineScope(Dispatchers.IO).launch {
+            val dashboard = dashboardDao.getDashboard()
+            if (dashboard != null) {
+                dashboardDao.updateDashboard(dashboard.copy(widgets = items))
+            } else {
+                dashboardDao.insertOrUpdateDashboard(Dashboard(widgets = items))
+            }
+        }
     }
 
-    fun loadWidgetItems(): List<WidgetItem> {
-        val json = getSharedPreferences("widgets", MODE_PRIVATE).getString("widget_items", "[]")
-        return Gson().fromJson(json, object : TypeToken<List<WidgetItem>>() {}.type)
-    }
 
     @Composable
     fun MultiWidgetCanvas(
@@ -318,40 +369,88 @@ class MainActivity : ComponentActivity() {
         var widgetWidth by remember { mutableStateOf(item.width) }
         var widgetHeight by remember { mutableStateOf(item.height) }
 
-        Box(modifier = Modifier.offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onLongPress = {
-                        onLongPressToRemove(item)
-                    })
-            }) {
-            AndroidView(factory = {
-                val info = appWidgetManager.getAppWidgetInfo(item.appWidgetId)
-                widgetHost.createView(context, item.appWidgetId, info).apply {
-                    setAppWidget(item.appWidgetId, info)
-                    layoutParams = FrameLayout.LayoutParams(widgetWidth, widgetHeight)
-                }
-            }, modifier = Modifier.size(widgetWidth.dp, widgetHeight.dp).pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        offsetX += dragAmount.x
-                        offsetY += dragAmount.y
-                        onPositionChanged(offsetX, offsetY)
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = {
+                            Log.e("fdknfjdonfld", "DraggableWidget: worked press")
+                            onLongPressToRemove(item)
+                        })
+                }) {
+            AndroidView(
+                factory = {
+                    val info = appWidgetManager.getAppWidgetInfo(item.appWidgetId)
+                    widgetHost.createView(context, item.appWidgetId, info).apply {
+                        setAppWidget(item.appWidgetId, info)
+                        layoutParams = FrameLayout.LayoutParams(widgetWidth, widgetHeight)
                     }
-                })
-
-            // Bottom-right resize handle
-            Box(
-                modifier = Modifier.size(24.dp).align(Alignment.BottomEnd)
-                    .background(Color.Gray.copy(alpha = 0.6f), shape = CircleShape)
+                }, modifier = Modifier
+                    .size(widgetWidth.dp, widgetHeight.dp)
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
-                            widgetWidth = (widgetWidth + dragAmount.x).toInt().coerceAtLeast(100)
-                            widgetHeight = (widgetHeight + dragAmount.y).toInt().coerceAtLeast(100)
-                            onSizeChanged(widgetWidth, widgetHeight)
+                            offsetX += dragAmount.x
+                            offsetY += dragAmount.y
+                            onPositionChanged(offsetX, offsetY)
                         }
                     })
+            if (editWidgets) {
+                Box(
+                    modifier = Modifier
+                        .wrapContentSize()
+                        .padding(4.dp)
+                ) {
+                    Row {
+                        // ❌ Remove Icon (Top End) - Styled
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove widget",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(24.dp)
+                                // .align(Alignment.TopEnd)
+                                .background(Color(0xFFD32F2F), shape = CircleShape) // deep red
+                                .clickable {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        deleteWidget(item.appWidgetId)
+                                    }
+                                }
+                                .padding(4.dp)
+                                .shadow(4.dp, shape = CircleShape))
+
+                        Spacer(modifier = Modifier.width(20.dp))
+
+                        // ⬍ Resize Handle (Bottom End) - Styled Box
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                //  .align(Alignment.BottomEnd)
+                                .background(Color(0xFF424242), shape = CircleShape) // dark gray
+                                .shadow(4.dp, shape = CircleShape)
+                                .pointerInput(Unit) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        widgetWidth =
+                                            (widgetWidth + dragAmount.x).toInt().coerceAtLeast(100)
+                                        widgetHeight =
+                                            (widgetHeight + dragAmount.y).toInt().coerceAtLeast(100)
+                                        onSizeChanged(widgetWidth, widgetHeight)
+                                    }
+                                }) {
+                            Icon(
+                                imageVector = Icons.Default.Menu, // cross arrows icon
+                                contentDescription = "Resize",
+                                tint = Color.White,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+                    }
+                }
+            }
+
+
         }
     }
 
@@ -394,7 +493,9 @@ class MainActivity : ComponentActivity() {
         val metadata = metadataState.value
 
         Column(
-            modifier = Modifier.background(Color.Red).padding(16.dp)
+            modifier = Modifier
+                .background(Color.Red)
+                .padding(16.dp)
         ) {
             Text("Now Playing:", color = Color.White)
             Text(
@@ -407,7 +508,6 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
-
 
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -514,7 +614,7 @@ class MainActivity : ComponentActivity() {
         date: String,
         amount: Double,
         cost: Double,
-        modifier: Modifier = Modifier
+        modifier: Modifier = Modifier,
     ) {
         val backgroundColor = if (isNext) Color(0xFF4CAF50) else Color(0xFF2196F3)
         val textColor = Color.White
@@ -544,8 +644,7 @@ class MainActivity : ComponentActivity() {
 
                 // Right side - Amount and Cost stacked vertically
                 Column(
-                    horizontalAlignment = Alignment.End,
-                    modifier = Modifier.width(30.dp)
+                    horizontalAlignment = Alignment.End, modifier = Modifier.width(30.dp)
                 ) {
                     Text(
                         text = "${amount.toInt()}L",
@@ -567,6 +666,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun LauncherHomeScreen(
+        wallpaper: Int = R.drawable.launcher_bg7,
         onAddWidget: () -> Unit,
         widgetItems: SnapshotStateList<WidgetItem>,
         appWidgetManager: AppWidgetManager,
@@ -575,12 +675,14 @@ class MainActivity : ComponentActivity() {
     ) {
         var showMenu by remember { mutableStateOf(false) }
         var showWallpaperSheet by remember { mutableStateOf(false) }
-        var currentWallpaper by remember { mutableStateOf(R.drawable.launcher_bg7) }
+        var showFuelLogs by remember { mutableStateOf(false) }
+        var showFuelDialog by remember { mutableStateOf(false) }
+        var currentWallpaper by remember { mutableIntStateOf(wallpaper) }
+
 
         // Wallpaper options
         val wallpapers = listOf(
             R.drawable.launcher_bg1,
-            R.drawable.launcher_bg2,
             R.drawable.launcher_bg3,
             R.drawable.launcher_bg4,
             R.drawable.launcher_bg5,
@@ -590,7 +692,13 @@ class MainActivity : ComponentActivity() {
         )
 
         Box(
-            modifier = Modifier.fillMaxSize().background(Color.Transparent)
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Transparent)
+                .then(
+                    if (isSnowfalll) Modifier.snowfall(density = 0.020, alpha = 0.5f)
+                    else Modifier
+                )
         ) {
             Image(
                 painter = painterResource(currentWallpaper),
@@ -602,17 +710,40 @@ class MainActivity : ComponentActivity() {
             )
 
             Box(
-                modifier = Modifier.align(alignment = Alignment.CenterEnd)
+                modifier = Modifier
+                    .align(alignment = Alignment.CenterEnd)
+                    .size(100.dp)
+                    .clickable(onClick = {
+                        showFuelDialog = true
+                    }),
+                contentAlignment = Alignment.CenterStart
             ) {
-                FuelHistoryRoad()
+                Image(
+                    painter = painterResource(R.drawable.add_fuel),
+                    contentDescription = null,
+                    modifier = Modifier.size(80.dp).padding(20.dp)
+                )
+
+                // FuelHistoryRoad()
+                /*    Image(
+                        painter = painterResource(R.drawable.road),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .align(Alignment.TopEnd),
+                        contentScale = ContentScale.FillHeight
+                    )*/
             }
             Box(
-                modifier = Modifier.align(alignment = Alignment.TopStart)
+                modifier = Modifier
+                    .align(alignment = Alignment.TopCenter)
                     .padding(start = 50.dp, top = 30.dp)
             ) {
                 AnalogClock()
                 Box(
-                    modifier = Modifier.align(alignment = Alignment.Center).padding(top = 80.dp)
+                    modifier = Modifier
+                        .align(alignment = Alignment.Center)
+                        .padding(top = 80.dp)
                 ) {
                     Text(
                         text = getCurrentDateFormatted(), style = TextStyle(
@@ -627,8 +758,9 @@ class MainActivity : ComponentActivity() {
 
 
             Box(
-                modifier = Modifier.align(alignment = Alignment.TopEnd)
-                    .padding(top = 25.dp, end = 15.dp)
+                modifier = Modifier
+                    .align(alignment = Alignment.BottomEnd)
+                    .padding(top = 0.dp, end = 15.dp)
             ) {
                 IconButton(
                     onClick = {
@@ -640,7 +772,7 @@ class MainActivity : ComponentActivity() {
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Settings",
                         tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(25.dp)
                     )
                 }
 
@@ -653,56 +785,124 @@ class MainActivity : ComponentActivity() {
                             is WidgetMenuAction.RemoveAllWidgets -> {
                                 widgetItems.clear()
                                 saveWidgetItems(emptyList())
-                                onUpdate()
+                                //onUpdate()
                             }
+
                             is WidgetMenuAction.EditWidgets -> {
-                                // Open wallpaper selector
+                                editWidgets = !editWidgets
+                            }
+
+                            is WidgetMenuAction.Wallpapers -> {
                                 showWallpaperSheet = true
                             }
-                        }
-                    }
-                )
 
-                // Wallpaper Selection Bottom Sheet
+                            is WidgetMenuAction.Fuel -> {
+                                showFuelDialog = true
+                            }
+
+                            is WidgetMenuAction.Snowfall -> {
+                                isSnowfalll = !isSnowfalll
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    val dashboard = dashboardDao.getDashboard()
+                                    if (dashboard != null) {
+                                        dashboardDao.updateDashboard(dashboard.copy(isSnowfall = isSnowfalll))
+                                    } else {
+                                        dashboardDao.insertOrUpdateDashboard(Dashboard(isSnowfall = isSnowfalll))
+                                    }
+                                }
+                            }
+                        }
+                    })
+
+                if (showFuelDialog) {
+                    FuelLogDialog(
+                        onDismiss = { showFuelDialog = false },
+                        onSubmit = { newLog ->
+                            CoroutineScope(Dispatchers.IO).launch {
+                                dashboardDao.insertLog(newLog)
+                                showFuelDialog = false
+                            }
+                        }
+                    )
+                }
+
                 if (showWallpaperSheet) {
                     ModalBottomSheet(
                         onDismissRequest = { showWallpaperSheet = false },
                         sheetState = rememberModalBottomSheetState(),
                         modifier = Modifier.fillMaxWidth(),
-                        containerColor = Color(0xFF2D2D2D)
+                        containerColor = Color(0xFF1E1E1E),  // Darker background for better contrast
+                        /// windowInsets = WindowInsets(0)  // Remove system insets for full control
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp)
+                                .padding(horizontal = 16.dp)
                         ) {
-                            Text(
-                                "Select Wallpaper",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color.White,
-                                modifier = Modifier.padding(bottom = 16.dp)
-                            )
+                            // Header
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "Select Wallpaper",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                IconButton(
+                                    onClick = { showWallpaperSheet = false },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Close",
+                                        tint = Color.White.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
 
+                            // Wallpaper Grid
                             LazyVerticalGrid(
-                                columns = GridCells.Fixed(3),
-                                modifier = Modifier.fillMaxWidth()
+                                columns = GridCells.Fixed(4),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(wallpapers) { wallpaper ->
-                                    Card(
+                                    Box(
                                         modifier = Modifier
-                                            .padding(8.dp)
-                                            .aspectRatio(1f)
+                                            .size(180.dp)  // Better aspect ratio for wallpapers
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFF2D2D2D))
                                             .clickable {
                                                 currentWallpaper = wallpaper
                                                 showWallpaperSheet = false
-                                            },
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
+                                                CoroutineScope(Dispatchers.IO).launch {
+                                                    val dashboard = dashboardDao.getDashboard()
+                                                    if (dashboard != null) {
+                                                        dashboardDao.updateDashboard(
+                                                            dashboard.copy(wallpaperId = wallpaper)
+                                                        )
+                                                    } else {
+                                                        dashboardDao.insertOrUpdateDashboard(
+                                                            Dashboard(wallpaperId = wallpaper)
+                                                        )
+                                                    }
+                                                }
+                                            }) {
                                         Image(
                                             painter = painterResource(wallpaper),
                                             contentDescription = "Wallpaper",
                                             contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(2.dp)  // Small padding for visual breathing room
                                         )
                                     }
                                 }
@@ -723,14 +923,28 @@ class MainActivity : ComponentActivity() {
             )
 
             Box(
-                modifier = Modifier.align(Alignment.BottomCenter).wrapContentWidth().height(100.dp)
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .wrapContentWidth()
+                    .height(100.dp)
                     .background(Color(0x00000000)) // Semi-transparent black background
             ) {
                 HomeBottomIcons(onClick = { bottomNavItem ->
                     when (bottomNavItem) {
                         is BottomNavItem.Map -> Unit
                         is BottomNavItem.Radio -> Unit
-                        is BottomNavItem.Music -> Unit
+                        is BottomNavItem.Music -> {
+                            val packageName = "in.krosbits.musicolet"
+                            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+                            if (launchIntent != null) {
+                                startActivity(launchIntent)
+                            } else {
+                                Toast.makeText(
+                                    this@MainActivity, "App not installed", Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+
                         is BottomNavItem.AllApps -> {
                             startActivity(
                                 Intent(
