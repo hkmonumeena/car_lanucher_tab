@@ -1,8 +1,11 @@
 package com.ruchitech.carlanuchertab.clock
 
+import android.R.attr.top
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -16,8 +19,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ruchitech.carlanuchertab.clock.utill.Time
+import com.ruchitech.carlanuchertab.helper.getCurrentDateFormatted
+import com.ruchitech.carlanuchertab.ui.theme.nonScaledSp
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,10 +37,32 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+
+@Composable
+fun ShowAnalogClock(modifier: Modifier) {
+    Box(modifier){
+        AnalogClock()
+        Box(
+            modifier = Modifier
+                .align(alignment = Alignment.Center)
+                .padding(top = 80.dp)
+        ) {
+            Text(
+                text = getCurrentDateFormatted(), style = TextStyle(
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Default,
+                    fontSize = 24.sp.nonScaledSp
+                )
+            )
+        }
+    }
+}
+
 @Composable
 fun AnalogClock() {
     Box(
-        modifier = Modifier.size(225.dp),
+        modifier = Modifier.size(250.dp),
         contentAlignment = Alignment.Center
     ) {
         var time by remember {

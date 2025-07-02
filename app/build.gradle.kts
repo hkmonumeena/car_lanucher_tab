@@ -77,7 +77,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.9.0")
 // Optional - Kotlin Extensions and Coroutines support
     implementation ("androidx.room:room-ktx:2.6.1")
-
 }
 // Add this to enable annotation processing with Hilt
 kapt {

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -138,34 +139,51 @@ private fun NumericKeypad(
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(keys) { key ->
             val isDelete = key == "⌫"
-            key == "0"
+            val isZero = key == "0"
+
+            val backgroundColor = when {
+                isDelete -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f)
+                else -> MaterialTheme.colorScheme.surfaceContainerHigh
+            }
+
+            val textColor = when {
+                isDelete -> MaterialTheme.colorScheme.onErrorContainer
+                else -> MaterialTheme.colorScheme.onSurface
+            }
 
             Box(
-                contentAlignment = Alignment.Center, modifier = Modifier
-                    .size(55.dp)
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(55.dp) // Slightly larger for better touch targets
                     .background(
-                        color = when {
-                            isDelete -> MaterialTheme.colorScheme.errorContainer
-                            else -> MaterialTheme.colorScheme.surfaceVariant
-                        }, shape = RoundedCornerShape(8.dp)
+                        color = backgroundColor,
+                        shape = RoundedCornerShape(12.dp) // More rounded corners
                     )
-                    .clickable {
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .clickable() {
                         if (isDelete) {
                             onDeletePressed()
                         } else {
                             onKeyPressed(key)
                         }
-                    }) {
-                Text(
-                    text = key, style = MaterialTheme.typography.titleLarge, color = when {
-                        isDelete -> MaterialTheme.colorScheme.onErrorContainer
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
+            ) {
+                Text(
+                    text = key,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.5.sp
+                    ),
+                    color = textColor
                 )
             }
         }
@@ -223,7 +241,6 @@ fun FuelLogDialog(
             }
 
             TextFieldType.PRICE -> {
-                // Prevent more than 2 decimal places
                 if (fuelPrice.contains(".") && fuelPrice.substringAfter(".").length >= 2 && key != "⌫") {
 
                 } else if (key != "." || !fuelPrice.contains(".")) {
@@ -491,6 +508,7 @@ fun FuelLogDialog(
 
                         // Location field (still using TextField as it's text input)
 
+
                         FuelDisplayBox2(
                             value = location,
                             onValueChange = { location = it },
@@ -499,7 +517,7 @@ fun FuelLogDialog(
                             keyboardType = KeyboardType.Decimal
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))/*
+                        Spacer(modifier = Modifier.height(0.dp))/*
                                                 Button(
                                                     onClick = {
                                                         val log = createFuelLogEntry(

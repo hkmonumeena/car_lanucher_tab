@@ -44,11 +44,11 @@ fun WidgetsDropdownMenu(
             icon = Icons.Default.Edit,
             action = WidgetMenuAction.Wallpapers
         ) ,
-        MenuItem(
-            text = "Fuel",
+/*        MenuItem(
+            text = "Fuels",
             icon = Icons.Default.Edit,
-            action = WidgetMenuAction.Fuel
-        ) ,
+            action = WidgetMenuAction.Fuels
+        ) ,*/
         MenuItem(
             text = "Snowfall",
             icon = Icons.Default.Edit,

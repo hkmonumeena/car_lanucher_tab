@@ -3,22 +3,16 @@ package com.ruchitech.carlanuchertab
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
-import android.content.Context
 import android.content.Intent
-import android.media.AudioManager
-import android.media.MediaMetadata
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
-import android.view.KeyEvent
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,14 +36,15 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,40 +67,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.idapgroup.snowfall.snowfall
-import com.ruchitech.carlanuchertab.clock.AnalogClock
+import com.ruchitech.carlanuchertab.clock.ShowAnalogClock
 import com.ruchitech.carlanuchertab.helper.BottomNavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
-import com.ruchitech.carlanuchertab.helper.getActiveMediaMetadata
-import com.ruchitech.carlanuchertab.helper.getCurrentDateFormatted
+import com.ruchitech.carlanuchertab.helper.wallpapers
 import com.ruchitech.carlanuchertab.roomdb.action.AppDatabase
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
+import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
+import com.ruchitech.carlanuchertab.ui.composables.FuelLogsEntry
+import com.ruchitech.carlanuchertab.ui.composables.FuelLogsList
 import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
+import com.ruchitech.carlanuchertab.ui.composables.Wallpaper
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
-import com.ruchitech.carlanuchertab.ui.theme.nonScaledSp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.time.format.DateTimeFormatter
 
 
 data class WidgetItem(
@@ -129,6 +120,7 @@ class MainActivity : ComponentActivity() {
     val widgetItems = mutableStateListOf<WidgetItem>()
     var editWidgets by mutableStateOf(false)
     var isSnowfalll by mutableStateOf(false)
+    var showFuelLogs by mutableStateOf(false)
     var setWallpaper by mutableStateOf(R.drawable.launcher_bg7)
 
     private lateinit var appWidgetManager: AppWidgetManager
@@ -369,33 +361,33 @@ class MainActivity : ComponentActivity() {
         var widgetWidth by remember { mutableStateOf(item.width) }
         var widgetHeight by remember { mutableStateOf(item.height) }
 
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
+        Box(modifier = Modifier
+            .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        Log.e("fdknfjdonfld", "DraggableWidget: worked press")
+                        onLongPressToRemove(item)
+                    })
+            }) {
+            AndroidView(factory = {
+                val info = appWidgetManager.getAppWidgetInfo(item.appWidgetId)
+                widgetHost.createView(context, item.appWidgetId, info).apply {
+                    setAppWidget(item.appWidgetId, info)
+                    layoutParams = FrameLayout.LayoutParams(widgetWidth, widgetHeight)
+                }
+            }, modifier = Modifier
+                .size(widgetWidth.dp, widgetHeight.dp)
                 .pointerInput(Unit) {
-                    detectTapGestures(
-                        onLongPress = {
-                            Log.e("fdknfjdonfld", "DraggableWidget: worked press")
-                            onLongPressToRemove(item)
-                        })
-                }) {
-            AndroidView(
-                factory = {
-                    val info = appWidgetManager.getAppWidgetInfo(item.appWidgetId)
-                    widgetHost.createView(context, item.appWidgetId, info).apply {
-                        setAppWidget(item.appWidgetId, info)
-                        layoutParams = FrameLayout.LayoutParams(widgetWidth, widgetHeight)
-                    }
-                }, modifier = Modifier
-                    .size(widgetWidth.dp, widgetHeight.dp)
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
+                    detectDragGestures { change, dragAmount ->
+                        if (editWidgets) {
                             change.consume()
                             offsetX += dragAmount.x
                             offsetY += dragAmount.y
                             onPositionChanged(offsetX, offsetY)
                         }
-                    })
+                    }
+                })
             if (editWidgets) {
                 Box(
                     modifier = Modifier
@@ -425,25 +417,29 @@ class MainActivity : ComponentActivity() {
                         // ⬍ Resize Handle (Bottom End) - Styled Box
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
+                                .size(48.dp)
                                 //  .align(Alignment.BottomEnd)
                                 .background(Color(0xFF424242), shape = CircleShape) // dark gray
                                 .shadow(4.dp, shape = CircleShape)
                                 .pointerInput(Unit) {
                                     detectDragGestures { change, dragAmount ->
-                                        change.consume()
-                                        widgetWidth =
-                                            (widgetWidth + dragAmount.x).toInt().coerceAtLeast(100)
-                                        widgetHeight =
-                                            (widgetHeight + dragAmount.y).toInt().coerceAtLeast(100)
-                                        onSizeChanged(widgetWidth, widgetHeight)
+                                        if (editWidgets) {
+                                            change.consume()
+                                            widgetWidth = (widgetWidth + dragAmount.x).toInt()
+                                                .coerceAtLeast(100)
+                                            widgetHeight = (widgetHeight + dragAmount.y).toInt()
+                                                .coerceAtLeast(100)
+                                            onSizeChanged(widgetWidth, widgetHeight)
+                                        }
                                     }
                                 }) {
                             Icon(
                                 imageVector = Icons.Default.Menu, // cross arrows icon
                                 contentDescription = "Resize",
                                 tint = Color.White,
-                                modifier = Modifier.align(Alignment.Center)
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(48.dp)
                             )
                         }
                     }
@@ -454,213 +450,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun requestNotificationListenerPermission(context: Context) {
-        val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-        context.startActivity(intent)
-    }
-
-
-    fun sendMediaButtonEvent(keyCode: Int) {
-        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-
-        val downEvent = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
-        val upEvent = KeyEvent(KeyEvent.ACTION_UP, keyCode)
-
-        audioManager.dispatchMediaKeyEvent(downEvent)
-        audioManager.dispatchMediaKeyEvent(upEvent)
-    }
-
-    fun isNotificationServiceEnabled(context: Context): Boolean {
-        val pkgName = context.packageName
-        val flat =
-            Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-        return flat != null && flat.contains(pkgName)
-    }
-
     @Composable
-    fun NowPlayingMiniUI(context: Context) {
-        val metadataState = remember { mutableStateOf<MediaMetadata?>(null) }
+    fun FuelLogs(onClose: () -> Unit) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.8F)
+                .fillMaxHeight(0.8F)
+                .padding(24.dp),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.DarkGray),
+        ) {
+            val isLoading = remember { mutableStateOf(true) }
+            val fuelLogs = remember { mutableStateListOf<FuelLog>() }
+            LaunchedEffect(Unit) {
+                val logs = dashboardDao.getAllLogs()
+                fuelLogs.addAll(logs)
+                isLoading.value = false
+            }
 
-        // Check for permission
-        LaunchedEffect(Unit) {
-            if (!isNotificationServiceEnabled(context)) {
-                requestNotificationListenerPermission(context)
+            if (isLoading.value) {
+                CircularProgressIndicator()
             } else {
-                metadataState.value = getActiveMediaMetadata(context)
-            }
-        }
-
-        val metadata = metadataState.value
-
-        Column(
-            modifier = Modifier
-                .background(Color.Red)
-                .padding(16.dp)
-        ) {
-            Text("Now Playing:", color = Color.White)
-            Text(
-                "Title: ${metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "Unknown"}",
-                color = Color.White
-            )
-            Text(
-                "Artist: ${metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "Unknown"}",
-                color = Color.White
-            )
-        }
-    }
-
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    @Composable
-    fun FuelHistoryRoad() {
-        // Sample data - in a real app this would come from a database
-        val fuelRecords = remember {
-            listOf(
-                FuelRecord(1, java.time.LocalDate.now(), 42.3, 3500.0, 24500),
-                FuelRecord(2, java.time.LocalDate.now().minusDays(4), 38.7, 3200.0, 24100),
-                FuelRecord(3, java.time.LocalDate.now().minusDays(7), 40.2, 3300.0, 23700),
-                FuelRecord(4, java.time.LocalDate.now().minusDays(10), 39.5, 3250.0, 23300),
-                FuelRecord(5, java.time.LocalDate.now().minusDays(10), 39.5, 3250.0, 23300),
-                FuelRecord(6, java.time.LocalDate.now().minusDays(10), 39.5, 3250.0, 23300),
-                FuelRecord(7, java.time.LocalDate.now().minusDays(10), 39.5, 3250.0, 23300),
-            )
-        }
-
-        // State for the next predicted filling
-        val predictedAmount by remember { mutableStateOf(41.0) }
-        val predictedCost by remember { mutableStateOf(3400.0) }
-
-        // Road dimensions
-        val roadWidth = 100.dp
-        val roadColor = Color(0xFF444444)
-        val roadLineColor = Color(0xFFFFD700) // gold/yellow for road markings
-
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(roadWidth)
-                .background(roadColor)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp),
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            // Upcoming filling (at the top)
-            FuelRoadItem(
-                isNext = true,
-                date = "Next",
-                amount = predictedAmount,
-                cost = predictedCost,
-                modifier = Modifier.padding(bottom = 32.dp)
-            )
-
-            // Road markings (dashed lines)
-            repeat(3) {
-                RoadMarking()
-            }
-
-            // Past fillings (most recent first)
-            fuelRecords.forEach { record ->
-                FuelRoadItem(
-                    isNext = false,
-                    date = record.date.format(DateTimeFormatter.ofPattern("dd MMM")),
-                    amount = record.amount,
-                    cost = record.cost,
-                    modifier = Modifier.padding(vertical = 16.dp)
-                )
-
-                RoadMarking()
-            }
-
-            // Start of the road (bottom)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(roadLineColor)
-            )
-        }
-    }
-
-    @Composable
-    fun RoadMarking() {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .background(Color.Transparent)
-        ) {
-            // Dashed line in the middle
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val dashWidth = 8.dp.toPx()
-                val dashHeight = 2.dp.toPx()
-                val gap = 8.dp.toPx()
-
-                var startX = 0f
-                while (startX < size.width) {
-                    drawRect(
-                        color = Color(0xFFFFD700),
-                        topLeft = Offset(startX, size.height / 2 - dashHeight / 2),
-                        size = Size(dashWidth, dashHeight)
-                    )
-                    startX += dashWidth + gap
-                }
+                FuelLogsList(fuelLogs = fuelLogs, onClose = onClose)
             }
         }
     }
 
-    @Composable
-    fun FuelRoadItem(
-        isNext: Boolean,
-        date: String,
-        amount: Double,
-        cost: Double,
-        modifier: Modifier = Modifier,
-    ) {
-        val backgroundColor = if (isNext) Color(0xFF4CAF50) else Color(0xFF2196F3)
-        val textColor = Color.White
-
-        Box(
-            modifier = modifier
-                .width(80.dp)  // Fixed width for compactness
-                .height(40.dp) // Fixed height
-                .background(backgroundColor, RoundedCornerShape(20.dp))
-                .padding(horizontal = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Left side - Date
-                Text(
-                    text = date,
-                    color = textColor,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                // Right side - Amount and Cost stacked vertically
-                Column(
-                    horizontalAlignment = Alignment.End, modifier = Modifier.width(30.dp)
-                ) {
-                    Text(
-                        text = "${amount.toInt()}L",
-                        color = textColor,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "₹${cost.toInt()}",
-                        color = textColor.copy(alpha = 0.8f),
-                        fontSize = 10.sp
-                    )
-                }
-            }
-        }
-    }
 
     @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class)
@@ -680,82 +496,36 @@ class MainActivity : ComponentActivity() {
         var currentWallpaper by remember { mutableIntStateOf(wallpaper) }
 
 
-        // Wallpaper options
-        val wallpapers = listOf(
-            R.drawable.launcher_bg1,
-            R.drawable.launcher_bg3,
-            R.drawable.launcher_bg4,
-            R.drawable.launcher_bg5,
-            R.drawable.launcher_bg6,
-            R.drawable.launcher_bg7,
-            R.drawable.launcher_bg8,
-        )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Transparent)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.5f)),
+                        startY = 0f,
+                        endY = 500f
+                    )
+                )
                 .then(
                     if (isSnowfalll) Modifier.snowfall(density = 0.020, alpha = 0.5f)
                     else Modifier
                 )
         ) {
-            Image(
-                painter = painterResource(currentWallpaper),
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .align(Alignment.Center),
-                contentScale = ContentScale.FillWidth
-            )
+            Wallpaper(currentWallpaper, Modifier.align(Alignment.Center))
+            FuelLogsEntry(modifier = Modifier.align(alignment = Alignment.CenterEnd), onTap = {
+                showFuelLogs = false
+                showFuelDialog = true
+            }, onLongPress = {
+                showFuelDialog = false
+                showFuelLogs = true
+            })
 
-            Box(
+            ShowAnalogClock(
                 modifier = Modifier
-                    .align(alignment = Alignment.CenterEnd)
-                    .size(100.dp)
-                    .clickable(onClick = {
-                        showFuelDialog = true
-                    }),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.add_fuel),
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp).padding(20.dp)
-                )
-
-                // FuelHistoryRoad()
-                /*    Image(
-                        painter = painterResource(R.drawable.road),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .align(Alignment.TopEnd),
-                        contentScale = ContentScale.FillHeight
-                    )*/
-            }
-            Box(
-                modifier = Modifier
-                    .align(alignment = Alignment.TopCenter)
+                    .align(alignment = Alignment.TopStart)
                     .padding(start = 50.dp, top = 30.dp)
-            ) {
-                AnalogClock()
-                Box(
-                    modifier = Modifier
-                        .align(alignment = Alignment.Center)
-                        .padding(top = 80.dp)
-                ) {
-                    Text(
-                        text = getCurrentDateFormatted(), style = TextStyle(
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Default,
-                            fontSize = 24.sp.nonScaledSp
-                        )
-                    )
-                }
-            }
-
+            )
 
             Box(
                 modifier = Modifier
@@ -811,19 +581,20 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+
+                            WidgetMenuAction.Fuels -> {
+
+                            }
                         }
                     })
 
                 if (showFuelDialog) {
-                    FuelLogDialog(
-                        onDismiss = { showFuelDialog = false },
-                        onSubmit = { newLog ->
-                            CoroutineScope(Dispatchers.IO).launch {
-                                dashboardDao.insertLog(newLog)
-                                showFuelDialog = false
-                            }
+                    FuelLogDialog(onDismiss = { showFuelDialog = false }, onSubmit = { newLog ->
+                        CoroutineScope(Dispatchers.IO).launch {
+                            dashboardDao.insertLog(newLog)
+                            showFuelDialog = false
                         }
-                    )
+                    })
                 }
 
                 if (showWallpaperSheet) {
@@ -848,8 +619,7 @@ class MainActivity : ComponentActivity() {
                                 Text(
                                     "Select Wallpaper",
                                     style = MaterialTheme.typography.titleLarge.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold
+                                        color = Color.White, fontWeight = FontWeight.SemiBold
                                     )
                                 )
                                 IconButton(
@@ -955,6 +725,18 @@ class MainActivity : ComponentActivity() {
                     }
 
                 })
+            }
+
+            if (showFuelLogs) {
+                Box(
+                    modifier = Modifier.align(alignment = Alignment.TopCenter),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    FuelLogs(onClose = {
+                        showFuelLogs = false
+                    })
+                }
+
             }
         }
     }

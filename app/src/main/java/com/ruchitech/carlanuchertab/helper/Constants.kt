@@ -24,6 +24,7 @@ sealed class WidgetMenuAction {
     object Wallpapers : WidgetMenuAction()
     object Fuel : WidgetMenuAction()
     object Snowfall : WidgetMenuAction()
+    object Fuels : WidgetMenuAction()
 
     companion object {
         val allActions = listOf(AddWidget, RemoveAllWidgets, EditWidgets)
@@ -31,6 +32,16 @@ sealed class WidgetMenuAction {
 }
 
 val bottomNavItems = BottomNavItem.allItems
+
+val wallpapers = listOf(
+    R.drawable.launcher_bg1,
+    R.drawable.launcher_bg3,
+    R.drawable.launcher_bg4,
+    R.drawable.launcher_bg5,
+    R.drawable.launcher_bg6,
+    R.drawable.launcher_bg7,
+    R.drawable.launcher_bg8,
+)
 
 
 
