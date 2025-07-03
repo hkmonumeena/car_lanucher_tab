@@ -77,6 +77,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.9.0")
 // Optional - Kotlin Extensions and Coroutines support
     implementation ("androidx.room:room-ktx:2.6.1")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 }
 // Add this to enable annotation processing with Hilt
 kapt {

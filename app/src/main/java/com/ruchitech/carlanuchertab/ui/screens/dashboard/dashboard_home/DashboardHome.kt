@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.idapgroup.snowfall.snowfall
 import com.ruchitech.carlanuchertab.AppsActivity
+import com.ruchitech.carlanuchertab.GpsActivity
 import com.ruchitech.carlanuchertab.MainActivity
 import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.WidgetItem
@@ -144,10 +145,10 @@ fun LauncherHomeScreen(
                     endY = 500f
                 )
             )
-            .then(
+     /*       .then(
                 if (viewModel.isSnowfalll) Modifier.snowfall(density = 0.020, alpha = 0.5f)
                 else Modifier
-            )
+            )*/
     ) {
         Wallpaper(currentWallpaper, Modifier.align(Alignment.Center))
         FuelLogsEntry(modifier = Modifier.align(alignment = Alignment.CenterEnd), onTap = {
@@ -355,7 +356,13 @@ fun LauncherHomeScreen(
         ) {
             HomeBottomIcons(onClick = { bottomNavItem ->
                 when (bottomNavItem) {
-                    is BottomNavItem.Map -> Unit
+                    is BottomNavItem.Map -> {
+                        context.startActivity(
+                            Intent(
+                                context, GpsActivity::class.java
+                            )
+                        )
+                    }
                     is BottomNavItem.Radio -> Unit
                     is BottomNavItem.Music -> {
                         val packageName = "in.krosbits.musicolet"

@@ -32,6 +32,7 @@ class VoiceCommandHelper (private val context: Context, private val onCommandDet
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
                 override fun onError(error: Int) {
+
                     Log.e("VoiceCommand", "Error: $error")
                 }
 
