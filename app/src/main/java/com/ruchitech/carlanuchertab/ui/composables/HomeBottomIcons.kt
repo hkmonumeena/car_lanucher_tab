@@ -41,6 +41,7 @@ fun HomeBottomIcons(onClick:(bottomNavItem: BottomNavItem)-> Unit){
         verticalAlignment = CenterVertically
     ) {
         bottomNavItems.forEach { item ->
+
             /*  IconButton(onClick = {
                   sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
               }) {
@@ -48,7 +49,7 @@ fun HomeBottomIcons(onClick:(bottomNavItem: BottomNavItem)-> Unit){
               }*/
 
             Column(
-                horizontalAlignment = CenterHorizontally,
+               horizontalAlignment = CenterHorizontally,
                 modifier = Modifier
                     .padding(horizontal = 15.dp)
                     .width(80.dp)

@@ -5,17 +5,18 @@ import android.content.Context
 import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.provider.Settings
 import android.util.Log
-import com.ruchitech.carlanuchertab.YourNotificationListenerService
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.jvm.java
 
 fun getActiveMediaMetadata(context: Context): MediaMetadata? {
     val mediaSessionManager =
         context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-
+/*
     val listenerComponent = ComponentName(context, YourNotificationListenerService::class.java)
     val controllers = mediaSessionManager.getActiveSessions(listenerComponent)
 
@@ -31,7 +32,7 @@ fun getActiveMediaMetadata(context: Context): MediaMetadata? {
             return metadata
         }
     }
-    Log.e("glfjgifogkfgf", "getActiveMediaMetadata: ${controllers.size}", )
+    Log.e("glfjgifogkfgf", "getActiveMediaMetadata: ${controllers.size}", )*/
     return null
 }
 
@@ -76,4 +77,15 @@ fun createFuelLogEntry(
         fuelPrice = price,
         location = location
     )
+}
+
+
+fun isNotificationListenerEnabled(context: Context): Boolean {
+    val packageName = context.packageName
+    val enabledListeners = Settings.Secure.getString(
+        context.contentResolver,
+        "enabled_notification_listeners"
+    )
+
+    return enabledListeners?.contains(packageName) == true
 }

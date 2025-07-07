@@ -80,6 +80,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-maps:18.2.0")
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+    implementation("androidx.palette:palette-ktx:1.0.0")
 }
 // Add this to enable annotation processing with Hilt
 kapt {

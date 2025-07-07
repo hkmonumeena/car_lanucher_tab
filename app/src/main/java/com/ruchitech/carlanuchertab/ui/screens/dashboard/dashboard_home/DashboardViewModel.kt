@@ -2,10 +2,14 @@ package com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard_home
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.util.Log
-import android.widget.Toast
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -14,11 +18,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.WidgetItem
+import com.ruchitech.carlanuchertab.helper.MusicNotificationListener
+import com.ruchitech.carlanuchertab.helper.NowPlayingInfo
 import com.ruchitech.carlanuchertab.helper.VoiceCommandHelper
 import com.ruchitech.carlanuchertab.roomdb.action.AppDatabase
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -34,15 +39,81 @@ class DashboardViewModel : ViewModel() {
     var currentAppWidgetId = -1
     lateinit var appDatabase: AppDatabase
     lateinit var dashboardDao: DashboardDao
-     lateinit var voiceHelper: VoiceCommandHelper
+    lateinit var voiceHelper: VoiceCommandHelper
+    lateinit var mediaSessionManager: MediaSessionManager
+    lateinit var componentName: ComponentName
+    private val _nowPlaying = mutableStateOf(NowPlayingInfo())
+    val nowPlaying: State<NowPlayingInfo> = _nowPlaying
+    private val _isPlaying = mutableStateOf(false)
+    val isPlaying: State<Boolean> = _isPlaying
+    private var lastSkipTime = 0L
+    private  val DEBOUNCE_INTERVAL_MS = 800L // 800ms between swipes
+    fun updateNowPlaying(info: NowPlayingInfo) {
+        _nowPlaying.value = info
+    }
+
+
+    fun togglePlayPause() {
+        getMusicoletController()?.let { controller ->
+            val playbackState = controller.playbackState?.state
+            if (playbackState == PlaybackState.STATE_PLAYING) {
+                controller.transportControls.pause()
+                updatePlaybackState()
+                Log.d("MediaControl", "⏸ Paused")
+            } else {
+                controller.transportControls.play()
+                updatePlaybackState()
+                Log.d("MediaControl", "▶️ Playing")
+            }
+        }
+    }
+
+    fun skipToPrevious() {
+        val now = System.currentTimeMillis()
+        if (now - lastSkipTime < DEBOUNCE_INTERVAL_MS) {
+            Log.d("MediaControl", "⏮ Skipped due to debounce")
+            return
+        }
+
+        lastSkipTime = now
+        getMusicoletController()?.transportControls?.skipToPrevious()
+        Log.d("MediaControl", "⏮ Previous triggered")
+    }
+
+    fun skipToNext() {
+        val now = System.currentTimeMillis()
+        if (now - lastSkipTime < DEBOUNCE_INTERVAL_MS) {
+            Log.d("MediaControl", "⏭ Skipped due to debounce")
+            return
+        }
+
+        lastSkipTime = now
+        getMusicoletController()?.transportControls?.skipToNext()
+        Log.d("MediaControl", "⏭ Next triggered")
+    }
+
+    private fun getMusicoletController(): MediaController? {
+        val controllers = mediaSessionManager.getActiveSessions(componentName)
+
+        return controllers.firstOrNull { it.packageName == "in.krosbits.musicolet" }
+    }
+
+    fun updatePlaybackState() {
+        val controller = getMusicoletController()
+        val isNowPlaying = controller?.playbackState?.state == PlaybackState.STATE_PLAYING
+        _isPlaying.value = isNowPlaying
+    }
 
     fun initData(context: Context) {
-        viewModelScope.launch(Dispatchers.IO){
-         appDatabase = AppDatabase.getDatabase(context)
-        dashboardDao = appDatabase.dashboardDao()
-        appWidgetManager = AppWidgetManager.getInstance(context)
-        appWidgetHost = AppWidgetHost(context, APPWIDGET_HOST_ID)
-        appWidgetHost.startListening()
+        viewModelScope.launch(Dispatchers.IO) {
+            mediaSessionManager =
+                context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+            componentName = ComponentName(context, MusicNotificationListener::class.java)
+            appDatabase = AppDatabase.getDatabase(context)
+            dashboardDao = appDatabase.dashboardDao()
+            appWidgetManager = AppWidgetManager.getInstance(context)
+            appWidgetHost = AppWidgetHost(context, APPWIDGET_HOST_ID)
+            appWidgetHost.startListening()
             val dashboard = dashboardDao.getDashboard()
             if (dashboard != null) {
                 setWallpaper = dashboard.wallpaperId
@@ -71,6 +142,7 @@ class DashboardViewModel : ViewModel() {
                     "add widget" in command -> {
                         Log.d("VoiceCommand", "Command recognized: Add Widget")
                     }
+
                     "start snow" in command -> {
                         Log.d("VoiceCommand", "Command recognized: Add Widget")
                         isSnowfalll = true
@@ -88,11 +160,12 @@ class DashboardViewModel : ViewModel() {
                 }
             }
 
+
         }
     }
 
 
-     fun launchWidgetPicker(launchWidget: (pickIntent: Intent) -> Unit) {
+    fun launchWidgetPicker(launchWidget: (pickIntent: Intent) -> Unit) {
         val appWidgetId = appWidgetHost.allocateAppWidgetId()
         currentAppWidgetId = appWidgetId
 
@@ -103,7 +176,7 @@ class DashboardViewModel : ViewModel() {
         pickIntent.putParcelableArrayListExtra(AppWidgetManager.EXTRA_CUSTOM_INFO, ArrayList())
         pickIntent.putParcelableArrayListExtra(AppWidgetManager.EXTRA_CUSTOM_EXTRAS, ArrayList())
         launchWidget(pickIntent)
-     //   pickWidget.launch(pickIntent)
+        //   pickWidget.launch(pickIntent)
     }
 
     fun showWidget(appWidgetId: Int) {
@@ -150,7 +223,7 @@ class DashboardViewModel : ViewModel() {
 
 
     fun saveWidgetItems(items: List<WidgetItem>) {
-        viewModelScope.launch(Dispatchers.IO){
+        viewModelScope.launch(Dispatchers.IO) {
             val dashboard = dashboardDao.getDashboard()
             if (dashboard != null) {
                 dashboardDao.updateDashboard(dashboard.copy(widgets = items))

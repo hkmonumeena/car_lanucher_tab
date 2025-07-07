@@ -10,10 +10,11 @@ sealed class BottomNavItem(
     object Map : BottomNavItem(R.drawable.map, "Map")
     object Radio : BottomNavItem(R.drawable.radio, "Radio")
     object Music : BottomNavItem(R.drawable.music, "Music")
+    object Fuel : BottomNavItem(R.drawable.add_fuel, "Fuel")
     object AllApps : BottomNavItem(R.drawable.apps, "All Apps")
 
     companion object {
-        val allItems = listOf(Map, Radio, Music, AllApps)
+        val allItems = listOf(Map, Radio, Music ,AllApps)
     }
 }
 

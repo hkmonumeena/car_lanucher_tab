@@ -2,7 +2,11 @@ package com.ruchitech.carlanuchertab
 
 
 import android.appwidget.AppWidgetManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -25,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.ruchitech.carlanuchertab.helper.NowPlayingInfo
 import com.ruchitech.carlanuchertab.helper.VoiceCommandHelper
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard_home.DashboardHome
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard_home.DashboardViewModel
@@ -111,6 +116,31 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val nowPlayingReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            intent?.let { intent: Intent ->
+                val title = intent.getStringExtra("title")
+                val artist = intent.getStringExtra("artist")
+                val artworkPath = intent.getStringExtra("artwork_path")
+                val artwork = artworkPath?.let { path ->
+                    try {
+                        BitmapFactory.decodeFile(path)
+                    } catch (e: Exception) {
+                        Log.e("NowPlayingReceiver", "❌ Failed to decode artwork from file: $e")
+                        null
+                    }
+                }
+
+                Log.d("MusicNotification", "From Broadcast 🎵 Song Title: $title, 👤 Artist: $artist")
+                viewModel.updateNowPlaying(
+                    NowPlayingInfo(title, artist, artwork)
+                )
+            }
+        }
+    }
+
+
+
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,11 +149,21 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = resources.getColor(R.color.transparent)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
         viewModel.initData(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                nowPlayingReceiver,
+                IntentFilter("now_playing_update"),
+                RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(nowPlayingReceiver, IntentFilter("now_playing_update"))
+        }
+
+
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-
-
                     DashboardHome(viewModel)
                 }
             }
@@ -133,6 +173,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         viewModel.appWidgetHost.stopListening()
+        unregisterReceiver(nowPlayingReceiver)
         super.onDestroy()
     }
 }

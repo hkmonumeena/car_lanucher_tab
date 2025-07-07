@@ -18,6 +18,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -146,7 +148,7 @@ fun AnalogClock() {
                 )
             }*/
 
-            rotate(degrees = time.hour , pivot = Offset(size.width / 2, size.height / 2)) {
+/*            rotate(degrees = time.hour , pivot = Offset(size.width / 2, size.height / 2)) {
                 val center = Offset(size.width / 2, size.height / 2)
 
                 val handLength = size.minDimension / 4
@@ -161,6 +163,27 @@ fun AnalogClock() {
                 }
 
                 drawPath(path, color = Color.White)
+            }*/
+
+            // Hour hand with 3D effect
+            rotate(time.hour, pivot = center) {
+                val path = Path().apply {
+                    moveTo(center.x, center.y - size.minDimension / 4)
+                    lineTo(center.x - 8f, center.y)
+                    lineTo(center.x, center.y + 10f)
+                    lineTo(center.x + 8f, center.y)
+                    close()
+                }
+                drawPath(
+                    path,
+                    color = Color.White,
+                    style = Fill
+                )
+                drawPath(
+                    path,
+                    color = Color(0xFF3A5A78),
+                    style = Stroke(width = 1f)
+                )
             }
 
 

@@ -23,10 +23,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -55,269 +60,234 @@ fun FuelLogsList(
     onClose: () -> Unit = {},
     onAddNew: () -> Unit = {},
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxHeight()
-            .background(Color.LightGray.copy(0.85f), shape = RoundedCornerShape(0.dp))
-    ) {
-        // Top Bar
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Premium Header
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
-                .background(                        brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color(0xFF8B4513).copy(alpha = 0.5f), // Sienna
-                        Color.Transparent
+                .height(72.dp)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF2A3D52),
+                            Color(0xFF1A2E42)
+                        ),
+                        start = Offset(0f, 0f),
+                        end = Offset(1f, 0f)
                     )
                 )
-                )
-                .padding(horizontal = 10.dp),
+                .padding(horizontal = 24.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            Text(
-                "Fuel Entries",
-                style = TextStyle(fontWeight = FontWeight.W900, fontSize = 18.sp),
-                modifier = Modifier.align(Alignment.CenterStart)
-            )
-
-            IconButton(
-                onClick = {onClose()},
-                modifier = Modifier.align(Alignment.CenterEnd)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = Icons.Default.Clear,
-                    contentDescription = "Clear",
-                    tint = Color.Black
+                Text(
+                    "FUEL HISTORY",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        color = Color(0xFF5D8BF4)
+                    )
                 )
+
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color(0xFF7D8FA1),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+
+        // Add New Button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Button(
+                onClick = onAddNew,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF5D8BF4),
+                    contentColor = Color.White
+                ),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 2.dp
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Add",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ADD NEW ENTRY", fontWeight = FontWeight.Bold)
+                }
             }
         }
 
         // List Items
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
-        ) {
-            items(fuelLogs) { log ->
-                VintageFuelLogItem(log)
+        if (fuelLogs.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "No fuel entries yet",
+                    style = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFF7D8FA1))
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
+                items(fuelLogs) { log ->
+                    PremiumFuelLogItem(log)
+                }
             }
         }
     }
 }
 
 @Composable
-fun VintageFuelLogItem(
-    log: FuelLog,
-    modifier: Modifier = Modifier,
-) {
+fun PremiumFuelLogItem(log: FuelLog) {
     Card(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(8.dp), // Less rounded for retro look
+            .height(140.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFF5E9D5) // Vintage cream paper color
-        ),
-        border = BorderStroke(1.dp, Color(0xFF8B4513).copy(alpha = 0.3f)) // Vintage border
+            containerColor = Color(0xFF2A3D52),
+            contentColor = Color.White
+        )
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFF5E9D5),
-                            Color(0xFFE8D9B5)
-                        ),
-                        startY = 0f,
-                        endY = Float.POSITIVE_INFINITY
-                    )
-                )
-                .padding(16.dp)
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Retro header with badge
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+            // Left Column - Date/Time/Location
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Vintage badge
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            color = Color(0xFF8B0000), // Dark red
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = 2.dp,
-                            color = Color(0xFFFFD700), // Gold border
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.filled_fuel),
-                        contentDescription = "Fuel Icon",
-                        modifier = Modifier.size(24.dp),
-                        tint = Color(0xFFFFD700) // Gold icon
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Column {
                     Text(
-                        text = "₹${log.rupee}",
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 28.sp,
-                            color = Color(0xFF8B0000), // Dark red
-                            shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.2f),
-                                offset = Offset(2f, 2f),
-                                blurRadius = 4f
-                            )
-                        ),
-                        modifier = Modifier
-                    )
-
-                    log.fuelPrice?.let { price ->
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    color = Color(0xFF8B4513).copy(alpha = 0.1f), // Sienna tint
-                                    shape = RoundedCornerShape(4.dp)
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = Color(0xFF8B4513).copy(alpha = 0.3f), // Sienna border
-                                    shape = RoundedCornerShape(4.dp)
-                                )
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = "@ ₹%.2f/L".format(price),
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF8B4513) // Sienna text
-                                )
-                            )
-                        }
-                    }
-                    // Vintage sticker-style liters indicator
-                    log.liters?.let { liters ->
-                        Text(
-                            text = "%.1f L".format(liters),
-                            style = MaterialTheme.typography.headlineLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.DarkGray.copy(0.60F)
-                            )
+                        text = log.date,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF5D8BF4)
                         )
-
-                    }
+                    )
+                    Text(
+                        text = log.time,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = Color(0xFF94A3B8)
+                        )
+                    )
                 }
 
-
+                log.location?.let { location ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.LocationOn,
+                            contentDescription = "Location",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = location,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Retro divider
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color(0xFF8B4513).copy(alpha = 0.5f), // Sienna
-                                Color.Transparent
-                            )
-                        )
-                    )
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Information section with retro styling
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+            // Middle Column - Fuel Data
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Date/Time row
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1F)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DateRange,
-                        contentDescription = null,
-                        tint = Color(0xFF556B2F), // Dark olive
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                log.liters?.let { liters ->
                     Text(
-                        text = "${log.date} • ${log.time}",
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            color = Color(0xFF556B2F), // Dark olive
-                            fontSize = 16.sp,
-                            letterSpacing = 0.5.sp
+                        text = "%.1f L".format(liters),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
                         )
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1F)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        log.location?.let {
-                            Icon(
-                                imageVector = Icons.Outlined.LocationOn,
-                                contentDescription = null,
-                                tint = Color(0xFF556B2F), // Dark olive
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = log.location?:"",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                color = Color(0xFF556B2F), // Dark olive
-                                fontSize = 14.sp,
-                                letterSpacing = 0.5.sp
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    IconButton(onClick = {}) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = null,
-                            tint = Color.Red.copy(alpha = 0.65F),
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
+                log.fuelPrice?.let { price ->
+                    Text(
+                        text = "₹%.2f/L".format(price),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
+            }
 
+            // Right Column - Cost
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = "₹ ${log.rupee}",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE2E8F0),
+                    )
+                )
 
-                Spacer(modifier = Modifier.height(8.dp))
+            //    Spacer(modifier = Modifier.height(8.dp))
 
-                // Price per liter badge at bottom
+       /*         // Calculate efficiency if possible
+                if (log.liters != null && log.liters > 0) {
+                    val kmPerLiter = log.rupee.toFloat() / (log.fuelPrice ?: 1f)
+                    Text(
+                        text = "%.1f km/L".format(kmPerLiter),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = when {
+                                kmPerLiter > 15 -> Color(0xFF4CAF50) // Green
+                                kmPerLiter > 10 -> Color(0xFFFFC107) // Yellow
+                                else -> Color(0xFFF44336) // Red
+                            }
+                        )
+                    )
+                }*/
             }
         }
     }
