@@ -88,6 +88,7 @@ class MusicNotificationListener : NotificationListenerService() {
         val controller = controllers.firstOrNull { it.packageName == packageName }
         controller?.let {
             val metadata = it.metadata
+            metadata?.description?.mediaUri
             val description = metadata?.description
             val songTitle = description?.title?.toString()
             val songArtist = description?.subtitle?.toString()

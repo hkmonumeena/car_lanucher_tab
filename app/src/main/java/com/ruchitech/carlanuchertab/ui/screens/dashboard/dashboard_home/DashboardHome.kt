@@ -1,6 +1,5 @@
 package com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard_home
 
-import android.R.attr.contentDescription
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -49,7 +48,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -58,8 +56,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ripple
@@ -97,6 +98,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -119,11 +121,13 @@ import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogsEntry
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogsList
 import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
+import com.ruchitech.carlanuchertab.ui.composables.ThinSlider
 import com.ruchitech.carlanuchertab.ui.composables.Wallpaper
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlin.math.pow
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -162,13 +166,25 @@ fun NowPlayingWidget(
 ) {
     val nowPlaying by viewModel.nowPlaying
     val isPlaying by viewModel.isPlaying
+    val position by viewModel.playbackPosition
+    val duration by viewModel.playbackDuration
+
+    // State for slider while dragging
+    var sliderPosition by remember { mutableStateOf(0f) }
+    var isUserSeeking by remember { mutableStateOf(false) }
+
+    LaunchedEffect(position, duration) {
+        if (!isUserSeeking && duration > 0L) {
+            sliderPosition = position.toFloat() / duration
+        }
+    }
     val interactionSource = remember { MutableInteractionSource() }
     val infiniteTransition = rememberInfiniteTransition(label = "ZoomTransition")
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (!isPlaying) 1.05f else 1f,
+        targetValue = if (isPlaying) 1.05f else 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            animation = tween(durationMillis = 2500, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "ZoomScale"
@@ -178,16 +194,56 @@ fun NowPlayingWidget(
             nowPlaying.artwork?.let { artwork ->
                 extractDominantColor(artwork.asImageBitmap().asAndroidBitmap())
                     ?.let { color ->
-                        // Using luminance here to check if color is too bright
-                        if (color.luminance > 0.7f) {  // <-- THIS IS WHERE WE USE IT
-                            color.copy(
-                                red = color.red * 0.7f,
-                                green = color.green * 0.7f,
-                                blue = color.blue * 0.7f
-                            )
+                        // Convert to linear RGB space for accurate luminance calculation
+                        val linearRed = if (color.red <= 0.04045f) {
+                            color.red / 12.92f
                         } else {
-                            color
-                        }.copy(alpha = 0.8f)
+                            ((color.red + 0.055f) / 1.055f).toDouble().pow(2.4).toFloat()
+                        }
+
+                        val linearGreen = if (color.green <= 0.04045f) {
+                            color.green / 12.92f
+                        } else {
+                            ((color.green + 0.055f) / 1.055f).toDouble().pow(2.4).toFloat()
+                        }
+
+                        val linearBlue = if (color.blue <= 0.04045f) {
+                            color.blue / 12.92f
+                        } else {
+                            ((color.blue + 0.055f) / 1.055f).toDouble().pow(2.4).toFloat()
+                        }
+
+                        // Calculate perceptual luminance (CIE 1931 standard)
+                        val luminance = 0.2126f * linearRed + 0.7152f * linearGreen + 0.0722f * linearBlue
+
+                        // Adjust color based on luminance and saturation
+                        if (luminance > 0.7f) {
+                            // For bright colors, reduce brightness but maintain saturation
+                            val hsv = FloatArray(3)
+                            android.graphics.Color.RGBToHSV(
+                                (color.red * 255).toInt(),
+                                (color.green * 255).toInt(),
+                                (color.blue * 255).toInt(),
+                                hsv
+                            )
+                            hsv[2] = hsv[2] * 0.7f // Reduce value (brightness)
+                            val adjustedColor = android.graphics.Color.HSVToColor(hsv)
+                            Color(adjustedColor).copy(alpha = 0.8f)
+                        } else if (luminance < 0.2f) {
+                            // For very dark colors, lighten them slightly
+                            val hsv = FloatArray(3)
+                            android.graphics.Color.RGBToHSV(
+                                (color.red * 255).toInt(),
+                                (color.green * 255).toInt(),
+                                (color.blue * 255).toInt(),
+                                hsv
+                            )
+                            hsv[2] = hsv[2].coerceAtLeast(0.3f) // Ensure minimum brightness
+                            val adjustedColor = android.graphics.Color.HSVToColor(hsv)
+                            Color(adjustedColor).copy(alpha = 0.8f)
+                        } else {
+                            color.copy(alpha = 0.8f)
+                        }
                     }
             } ?: Color(0xFF5D8BF4) // Fallback color
         )
@@ -199,8 +255,9 @@ fun NowPlayingWidget(
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .width(780.dp)
-            .height(420.dp)
+            .fillMaxWidth()
+            .padding(start = 10.dp)
+            .height(300.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(
                 brush = Brush.verticalGradient(
@@ -224,7 +281,7 @@ fun NowPlayingWidget(
                         Color.White.copy(alpha = 0.05f),
                         Color.Transparent
                     ),
-                    center = Offset(size.width * 0.7f, size.height * 0.3f),
+                    center = Offset(size.width * 0.7f, size.height * 0.5f),
                     radius = size.width * 0.6f
                 )
             )
@@ -233,8 +290,8 @@ fun NowPlayingWidget(
 
     Column(
         modifier = Modifier
-            .width(780.dp)
-            .height(420.dp)
+            .fillMaxWidth()
+            .height(300.dp)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, dragAmount ->
                     if (dragAmount > 30) {
@@ -252,11 +309,15 @@ fun NowPlayingWidget(
         verticalArrangement = Arrangement.Center
     ) {
 
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center
+        ) {
             // Artwork with reflection effect
             Box(
                 modifier = modifier
-                    .size(260.dp)
+                    .size(268.dp)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
@@ -298,19 +359,19 @@ fun NowPlayingWidget(
                 }
             }
 
-        Column {
+            Column {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-             /*           .background(
-                            color = Color(0x801E293B),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = dominantColor.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(12.dp)
-                        )*/
+                        /*           .background(
+                                       color = Color(0x801E293B),
+                                       shape = RoundedCornerShape(12.dp)
+                                   )
+                                   .border(
+                                       width = 1.dp,
+                                       color = dominantColor.copy(alpha = 0.2f),
+                                       shape = RoundedCornerShape(12.dp)
+                                   )*/
                         .padding(8.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -359,10 +420,63 @@ fun NowPlayingWidget(
                     }
                 }
 
+                if (duration > 0L) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        // White slider
+
+                        ThinSlider(
+                            value = sliderPosition.toFloat(),
+                            onValueChange = { newValue ->
+                                Log.e("fdklhfkdhnfld", "NowPlayingWidget: $newValue")
+                                isUserSeeking = true
+                                sliderPosition = newValue
+                            },
+                            valueRange = 0f..duration.toFloat(),
+                            modifier = Modifier.fillMaxWidth(),
+                            thumbColor = Color.White,
+                            trackColor = Color.White,
+                            onValueChangeFinished = {
+                                val seekMs = (sliderPosition * duration).toLong().coerceIn(0L, duration)
+                                viewModel.seekTo(seekMs)
+                                isUserSeeking = false
+                            }
+                        )
+
+
+                        // Time labels below
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Current position (left)
+                            Text(
+                                text = formatTime(position),
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+
+                            // Duration (right)
+                            Text(
+                                text = formatTime(duration),
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                }
 
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 15.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -416,17 +530,19 @@ fun NowPlayingWidget(
                             ) { viewModel.togglePlayPause() },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (isPlaying){
+                        if (!isPlaying) {
                             Icon(
-                                painter =  painterResource(R.drawable.play),
+                                painter = painterResource(R.drawable.play),
                                 contentDescription = if (isPlaying) "Pause" else "Play",
                                 tint = Color.White,
-                                modifier = Modifier.size(36.dp).padding(start = 5.dp)
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .padding(start = 5.dp)
                             )
-                        }else{
+                        } else {
                             Icon(
-                                painter =  painterResource(R.drawable.pause),
-                                contentDescription =  "Pause",
+                                painter = painterResource(R.drawable.pause),
+                                contentDescription = "Pause",
                                 tint = Color.White,
                                 modifier = Modifier.size(36.dp)
                             )
@@ -472,7 +588,12 @@ fun NowPlayingWidget(
     }
 }
 
-
+fun formatTime(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(minutes, seconds)
+}
 // Helper for extracting dominant color
 @Composable
 fun rememberDominantColorState(): DominantColorState {
@@ -562,34 +683,46 @@ fun LauncherHomeScreen(
             )
     ) {
         Wallpaper(currentWallpaper, Modifier.align(Alignment.Center))
-                FuelLogsEntry(modifier = Modifier.align(alignment = Alignment.BottomEnd), onTap = {
-                    showFuelLogs = false
-                    showFuelDialog = true
-                }, onLongPress = {
-                    showFuelDialog = false
-                    showFuelLogs = true
-                })
+        FuelLogsEntry(modifier = Modifier.align(alignment = Alignment.BottomEnd), onTap = {
+            showFuelLogs = false
+            showFuelDialog = true
+        }, onLongPress = {
+            showFuelDialog = false
+            showFuelLogs = true
+        })
 
-        ShowAnalogClock(
-            modifier = Modifier
-                .align(alignment = Alignment.TopStart)
-                .padding(start = 50.dp, top = 30.dp)
-        )
+        Box(modifier = Modifier
+            .fillMaxWidth()
+            .height(420.dp)
+            .align(alignment = Alignment.TopStart)) {
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .align(alignment = Alignment.TopStart)) {
+                ShowAnalogClock(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.3F)
+                )
 
-        Box(modifier = Modifier.align(alignment = Alignment.TopEnd)) {
-            NowPlayingWidget(viewModel)
+                Box(modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1F)) {
+                    NowPlayingWidget(viewModel)
+                }
+            }
         }
 
-/*        Box(modifier = Modifier.align(alignment = Alignment.BottomStart)) {
-            IconButton(onClick = { viewModel.voiceHelper.startListening() }) {
-                Icon(
-                    Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Voice Command",
-                    tint = Color.Yellow,
-                    modifier = Modifier.size(120.dp)
-                )
-            }
-        }*/
+
+        /*        Box(modifier = Modifier.align(alignment = Alignment.BottomStart)) {
+                    IconButton(onClick = { viewModel.voiceHelper.startListening() }) {
+                        Icon(
+                            Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Voice Command",
+                            tint = Color.Yellow,
+                            modifier = Modifier.size(120.dp)
+                        )
+                    }
+                }*/
 
         Box(
             modifier = Modifier
@@ -797,6 +930,7 @@ fun LauncherHomeScreen(
                             ).show()
                         }
                     }
+
                     is BottomNavItem.Music -> {
                         val packageName = "in.krosbits.musicolet"
                         val launchIntent =

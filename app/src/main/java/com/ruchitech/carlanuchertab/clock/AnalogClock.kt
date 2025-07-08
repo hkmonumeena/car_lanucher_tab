@@ -64,7 +64,7 @@ fun ShowAnalogClock(modifier: Modifier) {
 @Composable
 fun AnalogClock() {
     Box(
-        modifier = Modifier.size(250.dp),
+        modifier = Modifier.padding(15.dp).size(220.dp),
         contentAlignment = Alignment.Center
     ) {
         var time by remember {

@@ -5,9 +5,11 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -25,6 +27,7 @@ import com.ruchitech.carlanuchertab.roomdb.action.AppDatabase
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class DashboardViewModel : ViewModel() {
@@ -44,18 +47,29 @@ class DashboardViewModel : ViewModel() {
     lateinit var componentName: ComponentName
     private val _nowPlaying = mutableStateOf(NowPlayingInfo())
     val nowPlaying: State<NowPlayingInfo> = _nowPlaying
+
     private val _isPlaying = mutableStateOf(false)
     val isPlaying: State<Boolean> = _isPlaying
+
     private var lastSkipTime = 0L
-    private  val DEBOUNCE_INTERVAL_MS = 800L // 800ms between swipes
+    private val DEBOUNCE_INTERVAL_MS = 800L // 800ms between swipes
+    private val _playbackPosition = mutableStateOf(0L)
+    val playbackPosition: State<Long> = _playbackPosition
+    private val _playbackDuration = mutableStateOf(0L)
+    val playbackDuration: State<Long> = _playbackDuration
     fun updateNowPlaying(info: NowPlayingInfo) {
         _nowPlaying.value = info
+        startPlaybackMonitor()
     }
 
 
     fun togglePlayPause() {
         getMusicoletController()?.let { controller ->
             val playbackState = controller.playbackState?.state
+            val now = SystemClock.elapsedRealtime()
+            val position =
+                controller.playbackState!!.position + ((now - controller.playbackState!!.lastPositionUpdateTime) * controller.playbackState!!.playbackSpeed).toLong()
+            Log.d("gldfjhgjfghfiugh", "Current song position: $position ms")
             if (playbackState == PlaybackState.STATE_PLAYING) {
                 controller.transportControls.pause()
                 updatePlaybackState()
@@ -92,6 +106,51 @@ class DashboardViewModel : ViewModel() {
         Log.d("MediaControl", "⏭ Next triggered")
     }
 
+    fun updatePlaybackPosition(position: Long) {
+        _playbackPosition.value = position
+    }
+
+    fun updatePlaybackDuration(duration: Long) {
+        _playbackDuration.value = duration
+    }
+
+    fun seekTo(position: Long) {
+        val controller = getMusicoletController() ?: return
+        val max = controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: return
+        val safePos = position.coerceIn(0, max)
+        Log.d("MediaControl", "SeekTo requested: $safePos ms (clamped)")
+        controller.transportControls.seekTo(safePos)
+    }
+
+
+    fun startPlaybackMonitor() {
+        viewModelScope.launch {
+            val controller = getMusicoletController() ?: return@launch
+
+            while (true) {
+                val state = controller.playbackState ?: break
+                if (state.state == PlaybackState.STATE_PLAYING) {
+                    val now = SystemClock.elapsedRealtime()
+                    val pos =
+                        state.position + ((now - state.lastPositionUpdateTime) * state.playbackSpeed).toLong()
+                    updatePlaybackPosition(pos)
+                } else {
+                    // Just use the last known position (don't calculate with time)
+                    updatePlaybackPosition(state.position)
+                }
+
+                // Always update duration (it doesn't change much, but just in case)
+                val duration =
+                    controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+                updatePlaybackDuration(duration)
+                updatePlaybackStateOldObj(state.state)
+
+                delay(500L)
+            }
+        }
+    }
+
+
     private fun getMusicoletController(): MediaController? {
         val controllers = mediaSessionManager.getActiveSessions(componentName)
 
@@ -101,6 +160,11 @@ class DashboardViewModel : ViewModel() {
     fun updatePlaybackState() {
         val controller = getMusicoletController()
         val isNowPlaying = controller?.playbackState?.state == PlaybackState.STATE_PLAYING
+        _isPlaying.value = isNowPlaying
+    }
+
+    fun updatePlaybackStateOldObj(state: Int) {
+        val isNowPlaying = state == PlaybackState.STATE_PLAYING
         _isPlaying.value = isNowPlaying
     }
 
