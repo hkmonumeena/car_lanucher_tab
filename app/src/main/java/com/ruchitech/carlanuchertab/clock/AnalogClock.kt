@@ -38,6 +38,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.ExperimentalTime
 
 
 @Composable
@@ -61,6 +62,7 @@ fun ShowAnalogClock(modifier: Modifier) {
     }
 }
 
+@OptIn(ExperimentalTime::class)
 @Composable
 fun AnalogClock() {
     Box(
@@ -82,7 +84,7 @@ fun AnalogClock() {
             val job = CoroutineScope(Dispatchers.IO).launch {
                 while (true) {
 
-                    val currentMoment: Instant = Clock.System.now()
+                    val currentMoment: kotlin.time.Instant = kotlin.time.Clock.System.now()
                     val calendar = currentMoment.toLocalDateTime(TimeZone.currentSystemDefault())
 
                     val hour = calendar.hour

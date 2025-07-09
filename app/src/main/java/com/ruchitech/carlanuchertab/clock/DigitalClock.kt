@@ -17,11 +17,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.ExperimentalTime
 
+@OptIn(ExperimentalTime::class)
 @Composable
 fun DigitalClock() {
     var time by remember {
@@ -33,7 +33,7 @@ fun DigitalClock() {
         val job =
             CoroutineScope(Dispatchers.IO).launch {
                 while (true) {
-                    val currentMoment: Instant = Clock.System.now()
+                    val currentMoment: kotlin.time.Instant = kotlin.time.Clock.System.now()
                     val calendar = currentMoment.toLocalDateTime(TimeZone.currentSystemDefault())
 
                     time = calendar.time.toAnalog()
