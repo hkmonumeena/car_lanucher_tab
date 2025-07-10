@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
 import android.os.Looper
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -36,10 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -55,15 +52,15 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.LatLng
 import com.ruchitech.carlanuchertab.ui.theme.CarLanucherTabTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class GpsActivity : ComponentActivity() {
     private lateinit var mapView: MapView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Initialize MapView
         mapView = MapView(this)
         mapView.onCreate(savedInstanceState)
 
@@ -98,13 +95,13 @@ class GpsActivity : ComponentActivity() {
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun GPSMapScreen(mapView: MapView) {
-    val context = LocalContext.current
+    LocalContext.current
     val locationState = rememberLocationState()
     var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
 
     // Request location permission
     val locationPermissionState = rememberPermissionState(
-        android.Manifest.permission.ACCESS_FINE_LOCATION
+        Manifest.permission.ACCESS_FINE_LOCATION
     )
 
     LaunchedEffect(Unit) {
@@ -162,7 +159,7 @@ fun rememberLocationState(): LocationState {
     val context = LocalContext.current
     val locationState = remember { LocationState() }
 
-    DisposableEffect (Unit) {
+    DisposableEffect(Unit) {
         val locationClient = LocationServices.getFusedLocationProviderClient(context)
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,

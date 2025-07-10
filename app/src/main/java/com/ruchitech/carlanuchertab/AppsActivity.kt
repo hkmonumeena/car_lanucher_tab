@@ -65,6 +65,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.rememberAsyncImagePainter
 import com.ruchitech.carlanuchertab.MyApp.Companion.loadInstalledApps
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -74,7 +75,7 @@ data class DraggablePosition(
     val y: Float = 0f,
 )
 
-
+@AndroidEntryPoint
 class AppsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

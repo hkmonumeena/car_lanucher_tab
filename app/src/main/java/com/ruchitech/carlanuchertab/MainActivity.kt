@@ -10,29 +10,20 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.ruchitech.carlanuchertab.helper.NowPlayingInfo
-import com.ruchitech.carlanuchertab.helper.VoiceCommandHelper
-import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard_home.DashboardHome
+import com.ruchitech.carlanuchertab.ui.screens.dashboard.WidgetPickerScreen
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard_home.DashboardViewModel
+import dagger.hilt.android.AndroidEntryPoint
 
 
 data class WidgetItem(
@@ -43,10 +34,10 @@ data class WidgetItem(
     val height: Int,
 )
 
-
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    val viewModel: DashboardViewModel by viewModels()
+    lateinit var viewModel: DashboardViewModel
 
     val configureWidget =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -57,7 +48,7 @@ class MainActivity : ComponentActivity() {
                     "WidgetFlow",
                     "Configuration complete. Showing widget ID: ${viewModel.currentAppWidgetId}"
                 )
-                viewModel.showWidget(viewModel.currentAppWidgetId)
+                viewModel.showWidget(viewModel.currentAppWidgetId, this)
             } else {
                 Log.w(
                     "WidgetFlow", "Widget configuration canceled. ResultCode: ${result.resultCode}"
@@ -68,7 +59,7 @@ class MainActivity : ComponentActivity() {
                 if (appWidgetInfo?.configure != null) {
                     // Some apps don't return RESULT_OK even when configured
                     Log.w("WidgetFlow", "Trying to show widget anyway.")
-                    viewModel.showWidget(viewModel.currentAppWidgetId)
+                    viewModel.showWidget(viewModel.currentAppWidgetId, this)
                 }
             }
         }
@@ -106,7 +97,7 @@ class MainActivity : ComponentActivity() {
                     configureWidget.launch(configIntent)
                 } else {
                     Log.d("WidgetFlow", "No config required. Directly showing widget.")
-                    viewModel.showWidget(appWidgetId)
+                    viewModel.showWidget(appWidgetId, this)
                 }
             } else {
                 Log.w(
@@ -140,36 +131,39 @@ class MainActivity : ComponentActivity() {
     }
 
 
-
-
-    @RequiresApi(Build.VERSION_CODES.O)
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         window.statusBarColor = resources.getColor(R.color.transparent)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
-        viewModel.initData(this)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(
-                nowPlayingReceiver,
-                IntentFilter("now_playing_update"),
-                RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(nowPlayingReceiver, IntentFilter("now_playing_update"))
-        }
-
-
+        registerMusicReceiver()
+        //  viewModel.initData(this)
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    DashboardHome(viewModel)
+                    //  DashboardHome(viewModel)
+                    WidgetPickerScreen()
                 }
             }
-
         }
     }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun registerMusicReceiver() {
+        try {
+            val filter = IntentFilter("now_playing_update")
+            registerReceiver(
+                nowPlayingReceiver,
+                filter,
+                RECEIVER_NOT_EXPORTED
+            )
+
+        } catch (e: Exception) {
+            Log.e("MusicNotification", "❌ Failed to register music receiver: $e")
+        }
+    }
+
 
     override fun onDestroy() {
         viewModel.appWidgetHost.stopListening()

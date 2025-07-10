@@ -26,11 +26,17 @@ import com.ruchitech.carlanuchertab.helper.VoiceCommandHelper
 import com.ruchitech.carlanuchertab.roomdb.action.AppDatabase
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
-class DashboardViewModel : ViewModel() {
+@HiltViewModel
+class DashboardViewModel @Inject constructor(
+     val dashboardDao: DashboardDao
+) : ViewModel() {
     val widgetItems = mutableStateListOf<WidgetItem>()
     var editWidgets by mutableStateOf(false)
     var isSnowfalll by mutableStateOf(false)
@@ -41,7 +47,6 @@ class DashboardViewModel : ViewModel() {
     val APPWIDGET_HOST_ID = 1024
     var currentAppWidgetId = -1
     lateinit var appDatabase: AppDatabase
-    lateinit var dashboardDao: DashboardDao
     lateinit var voiceHelper: VoiceCommandHelper
     lateinit var mediaSessionManager: MediaSessionManager
     lateinit var componentName: ComponentName
@@ -173,8 +178,6 @@ class DashboardViewModel : ViewModel() {
             mediaSessionManager =
                 context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
             componentName = ComponentName(context, MusicNotificationListener::class.java)
-            appDatabase = AppDatabase.getDatabase(context)
-            dashboardDao = appDatabase.dashboardDao()
             appWidgetManager = AppWidgetManager.getInstance(context)
             appWidgetHost = AppWidgetHost(context, APPWIDGET_HOST_ID)
             appWidgetHost.startListening()
@@ -243,13 +246,16 @@ class DashboardViewModel : ViewModel() {
         //   pickWidget.launch(pickIntent)
     }
 
-    fun showWidget(appWidgetId: Int) {
-        Log.e("showWidget", "Showing widget: $appWidgetId")
+    fun showWidget(appWidgetId: Int, context: Context) {
+        Log.d("showWidget", "📦 Request to show widget: $appWidgetId")
+
         viewModelScope.launch(Dispatchers.IO) {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
             val info = appWidgetManager.getAppWidgetInfo(appWidgetId)
             val dashboardData = dashboardDao.getDashboard()
+
             if (info == null) {
-                Log.e("showWidget", "AppWidgetInfo is null for ID: $appWidgetId")
+                Log.e("showWidget", "❌ AppWidgetInfo is null for ID: $appWidgetId")
                 if (dashboardData != null) {
                     deleteWidget(appWidgetId)
                 }
@@ -262,6 +268,7 @@ class DashboardViewModel : ViewModel() {
 
             if (dashboardData != null) {
                 val updatedWidgets = dashboardData.widgets.toMutableList().apply {
+                    removeAll { it.appWidgetId == appWidgetId } // prevent duplicates
                     add(widgetItem)
                 }
                 val updatedDashboard = dashboardData.copy(widgets = updatedWidgets)
@@ -269,10 +276,16 @@ class DashboardViewModel : ViewModel() {
             } else {
                 dashboardDao.insertOrUpdateDashboard(Dashboard(widgets = listOf(widgetItem)))
             }
-            widgetItems.add(widgetItem)
+
+            // Update in-memory list (you may want to use MutableStateFlow instead)
+            withContext(Dispatchers.Main) {
+                widgetItems.removeAll { it.appWidgetId == appWidgetId }
+                widgetItems.add(widgetItem)
+                Log.d("showWidget", "✅ Widget shown and stored: $widgetItem")
+            }
         }
-        //saveWidgetItems(widgetItems)
     }
+
 
     suspend fun deleteWidget(widgetId: Int) {
         val dashboard = dashboardDao.getDashboard()

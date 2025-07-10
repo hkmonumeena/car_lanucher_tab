@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlinx.serialization)
     id("kotlin-kapt")
+    id("dagger.hilt.android.plugin")
 
 }
 
@@ -15,7 +16,7 @@ android {
 
     defaultConfig {
         applicationId = "com.ruchitech.carlanuchertab"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -73,6 +74,12 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.accompanist.permissions)
     implementation(libs.androidx.palette.ktx)
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation ("androidx.hilt:hilt-work:1.0.0")
+    kapt("com.google.dagger:hilt-compiler:2.55")
+    implementation("com.google.dagger:hilt-android:2.55")
+    implementation("androidx.work:work-runtime:2.10.2")
+// Or latest
 }
 // Add this to enable annotation processing with Hilt
 kapt {
