@@ -1,5 +1,6 @@
 package com.ruchitech.carlanuchertab.ui.composables
 
+import android.R.attr.text
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -14,7 +15,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Text
@@ -32,7 +32,7 @@ fun WidgetsDropdownMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     onMenuAction: (WidgetMenuAction) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val menuItems = listOf(
         MenuItem(
@@ -41,25 +41,15 @@ fun WidgetsDropdownMenu(
             action = WidgetMenuAction.AddWidget
         ),
         MenuItem(
-            text = "Edit Widget",
+            text = "Edit Widgets",
             icon = Icons.Default.Add,
             action = WidgetMenuAction.EditWidgets
-        ),
-        MenuItem(
-            text = "Remove All Widgets",
-            icon = Icons.Default.Delete,
-            action = WidgetMenuAction.RemoveAllWidgets
         ),
         MenuItem(
             text = "Wallpapers",
             icon = Icons.Default.Edit,
             action = WidgetMenuAction.Wallpapers
-        ) ,
-/*        MenuItem(
-            text = "Fuels",
-            icon = Icons.Default.Edit,
-            action = WidgetMenuAction.Fuels
-        ) ,*/
+        ),
         MenuItem(
             text = "Snowfall",
             icon = Icons.Default.Edit,
@@ -111,7 +101,7 @@ fun WidgetsDropdownMenu(
                 modifier = Modifier
                     .height(48.dp) // Consistent touch target size
                     .background(
-                        color =Color.Transparent,
+                        color = Color.Transparent,
                         shape = RoundedCornerShape(8.dp)
                     ),
                 colors = MenuDefaults.itemColors(
@@ -122,4 +112,5 @@ fun WidgetsDropdownMenu(
                 )
             )
         }
-    }}
+    }
+}

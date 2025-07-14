@@ -58,7 +58,6 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.appcompat)
     implementation(libs.coil.compose)
-    implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.gson)
     implementation(libs.kotlinx.datetime)
@@ -79,7 +78,10 @@ dependencies {
     kapt("com.google.dagger:hilt-compiler:2.55")
     implementation("com.google.dagger:hilt-android:2.55")
     implementation("androidx.work:work-runtime:2.10.2")
-// Or latest
+    implementation(libs.androidx.material3.window.size.class1)
+    implementation(libs.androidx.material3.adaptive.navigation.suite)
+    implementation("androidx.navigation:navigation-compose:2.9.1")
+
 }
 // Add this to enable annotation processing with Hilt
 kapt {

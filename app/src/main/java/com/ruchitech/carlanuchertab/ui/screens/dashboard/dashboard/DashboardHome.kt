@@ -1,5 +1,6 @@
-package com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard_home
+package com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard
 
+import android.R.attr.duration
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -56,11 +57,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ripple
@@ -98,7 +96,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -132,14 +129,17 @@ import kotlin.math.pow
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun DashboardHome(viewModel: DashboardViewModel) {
+/*
     val context = LocalContext.current as MainActivity
 
     LauncherHomeScreen(
         wallpaper = viewModel.setWallpaper,
         onAddWidget = {
-            viewModel.launchWidgetPicker(launchWidget = {
-                context.pickWidget.launch(it)
-            })
+            */
+/*       viewModel.launchWidgetPicker(launchWidget = {
+                       context.pickWidget.launch(it)
+                   })*//*
+
         },
         widgetItems = viewModel.widgetItems,
         appWidgetManager = viewModel.appWidgetManager,
@@ -147,6 +147,7 @@ fun DashboardHome(viewModel: DashboardViewModel) {
         onUpdate = { viewModel.saveWidgetItems(viewModel.widgetItems) },
         viewModel
     )
+*/
 
 }
 
@@ -164,32 +165,32 @@ fun NowPlayingWidget(
     viewModel: DashboardViewModel,
     modifier: Modifier = Modifier,
 ) {
-    val nowPlaying by viewModel.nowPlaying
-    val isPlaying by viewModel.isPlaying
+   // val nowPlaying by viewModel.nowPlaying
+/*    val isPlaying by viewModel.isPlaying
     val position by viewModel.playbackPosition
-    val duration by viewModel.playbackDuration
+    val duration by viewModel.playbackDuration*/
 
     // State for slider while dragging
     var sliderPosition by remember { mutableStateOf(0f) }
     var isUserSeeking by remember { mutableStateOf(false) }
-
+/*
     LaunchedEffect(position, duration) {
         if (!isUserSeeking && duration > 0L) {
             sliderPosition = position.toFloat() / duration
         }
-    }
+    }*/
     val interactionSource = remember { MutableInteractionSource() }
     val infiniteTransition = rememberInfiniteTransition(label = "ZoomTransition")
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (isPlaying) 1.05f else 1f,
+        targetValue = if (true) 1.05f else 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 2500, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "ZoomScale"
     )
-    val dominantColor by remember(nowPlaying.artwork) {
+/*    val dominantColor by remember(nowPlaying.artwork) {
         mutableStateOf(
             nowPlaying.artwork?.let { artwork ->
                 extractDominantColor(artwork.asImageBitmap().asAndroidBitmap())
@@ -214,7 +215,8 @@ fun NowPlayingWidget(
                         }
 
                         // Calculate perceptual luminance (CIE 1931 standard)
-                        val luminance = 0.2126f * linearRed + 0.7152f * linearGreen + 0.0722f * linearBlue
+                        val luminance =
+                            0.2126f * linearRed + 0.7152f * linearGreen + 0.0722f * linearBlue
 
                         // Adjust color based on luminance and saturation
                         if (luminance > 0.7f) {
@@ -363,7 +365,7 @@ fun NowPlayingWidget(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        /*           .background(
+                        *//*           .background(
                                        color = Color(0x801E293B),
                                        shape = RoundedCornerShape(12.dp)
                                    )
@@ -371,7 +373,7 @@ fun NowPlayingWidget(
                                        width = 1.dp,
                                        color = dominantColor.copy(alpha = 0.2f),
                                        shape = RoundedCornerShape(12.dp)
-                                   )*/
+                                   )*//*
                         .padding(8.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -441,7 +443,8 @@ fun NowPlayingWidget(
                             thumbColor = Color.White,
                             trackColor = Color.White,
                             onValueChangeFinished = {
-                                val seekMs = (sliderPosition * duration).toLong().coerceIn(0L, duration)
+                                val seekMs =
+                                    (sliderPosition * duration).toLong().coerceIn(0L, duration)
                                 viewModel.seekTo(seekMs)
                                 isUserSeeking = false
                             }
@@ -585,7 +588,7 @@ fun NowPlayingWidget(
         }
         Spacer(modifier = Modifier.height(16.dp))
         // Controls with dynamic color accents
-    }
+    }*/
 }
 
 fun formatTime(ms: Long): String {
@@ -594,6 +597,7 @@ fun formatTime(ms: Long): String {
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
 }
+
 // Helper for extracting dominant color
 @Composable
 fun rememberDominantColorState(): DominantColorState {
@@ -678,7 +682,7 @@ fun LauncherHomeScreen(
                 )
             )
             .then(
-                if (viewModel.isSnowfalll) Modifier.snowfall(density = 0.020, alpha = 0.5f)
+                if (true) Modifier.snowfall(density = 0.020, alpha = 0.5f)
                 else Modifier
             )
     ) {
@@ -691,26 +695,34 @@ fun LauncherHomeScreen(
             showFuelLogs = true
         })
 
-        Box(modifier = Modifier
-            .fillMaxWidth()
-            .height(420.dp)
-            .align(alignment = Alignment.TopStart)) {
-            Row(modifier = Modifier
+        Box(
+            modifier = Modifier
                 .fillMaxWidth()
-                .align(alignment = Alignment.TopStart)) {
+                .height(420.dp)
+                .align(alignment = Alignment.TopStart)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(alignment = Alignment.TopStart)
+            ) {
                 ShowAnalogClock(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(0.3F)
                 )
 
-                Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1F)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1F)
+                ) {
                     NowPlayingWidget(viewModel)
                 }
             }
         }
+
+
 
 
         /*        Box(modifier = Modifier.align(alignment = Alignment.BottomStart)) {
@@ -762,7 +774,7 @@ fun LauncherHomeScreen(
                         }
 
                         is WidgetMenuAction.EditWidgets -> {
-                            viewModel.editWidgets = !viewModel.editWidgets
+                            // viewModel.editWidgets = !viewModel.editWidgets
                         }
 
                         is WidgetMenuAction.Wallpapers -> {
@@ -774,15 +786,14 @@ fun LauncherHomeScreen(
                         }
 
                         is WidgetMenuAction.Snowfall -> {
-                            viewModel.isSnowfalll = !viewModel.isSnowfalll
                             CoroutineScope(Dispatchers.IO).launch {
                                 val dashboard = viewModel.dashboardDao.getDashboard()
                                 if (dashboard != null) {
-                                    viewModel.dashboardDao.updateDashboard(dashboard.copy(isSnowfall = viewModel.isSnowfalll))
+                                    viewModel.dashboardDao.updateDashboard(dashboard.copy(isSnowfall = true))
                                 } else {
                                     viewModel.dashboardDao.insertOrUpdateDashboard(
                                         Dashboard(
-                                            isSnowfall = viewModel.isSnowfalll
+                                            isSnowfall = true
                                         )
                                     )
                                 }
@@ -978,7 +989,7 @@ fun LauncherHomeScreen(
 }
 
 @Composable
-fun MultiWidgetCanvas(
+private fun MultiWidgetCanvas(
     widgetItems: SnapshotStateList<WidgetItem>,
     widgetHost: AppWidgetHost,
     appWidgetManager: AppWidgetManager,
@@ -1023,7 +1034,7 @@ fun MultiWidgetCanvas(
 }
 
 @Composable
-fun DraggableWidget(
+private fun DraggableWidget(
     item: WidgetItem,
     widgetHost: AppWidgetHost,
     appWidgetManager: AppWidgetManager,
@@ -1059,7 +1070,7 @@ fun DraggableWidget(
                 .size(widgetWidth.dp, widgetHeight.dp)
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
-                        if (viewModel.editWidgets) {
+                        if (true) {
                             change.consume()
                             offsetX += dragAmount.x
                             offsetY += dragAmount.y
@@ -1067,7 +1078,7 @@ fun DraggableWidget(
                         }
                     }
                 })
-        if (viewModel.editWidgets) {
+        if (true) {
             Box(
                 modifier = Modifier
                     .wrapContentSize()
@@ -1102,7 +1113,7 @@ fun DraggableWidget(
                             .shadow(4.dp, shape = CircleShape)
                             .pointerInput(Unit) {
                                 detectDragGestures { change, dragAmount ->
-                                    if (viewModel.editWidgets) {
+                                    if (true) {
                                         change.consume()
                                         widgetWidth =
                                             (widgetWidth + dragAmount.x).toInt().coerceAtLeast(100)

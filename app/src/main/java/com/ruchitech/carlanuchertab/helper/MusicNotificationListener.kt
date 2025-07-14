@@ -124,6 +124,7 @@ class MusicNotificationListener : NotificationListenerService() {
                          putExtra("artwork", byteStream.toByteArray())*/
                 }
             }
+            Log.e("fdjgbguifdgbkufdn", "broadcastNowPlaying: data sent")
             sendBroadcast(intent)
         }
     }
