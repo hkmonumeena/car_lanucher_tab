@@ -1,5 +1,6 @@
 package com.ruchitech.carlanuchertab.ui.screens.dashboard
 
+import android.R.attr.textSize
 import android.app.Activity
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
@@ -15,28 +16,37 @@ import android.util.Log
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,13 +57,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color.Companion.White
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -71,10 +89,104 @@ import com.ruchitech.carlanuchertab.WidgetItem
 import com.ruchitech.carlanuchertab.clock.ShowAnalogClock
 import com.ruchitech.carlanuchertab.helper.MusicNotificationListener
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
+import com.ruchitech.carlanuchertab.rememberVehicleLocationState
 import com.ruchitech.carlanuchertab.ui.composables.ModalWallpaper
 import com.ruchitech.carlanuchertab.ui.composables.MusicUi
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.DashboardViewModel
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+
+
+@Composable
+fun AnalogSpeedometer(
+    currentSpeed: Int = 30, // Default dummy value (0-220 km/h)
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .width(300.dp)
+            .height(300.dp),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize().align(Alignment.TopCenter)) {
+            val center = Offset(size.width / 2, size.height * 0.9f)
+            val radius = size.width * 0.45f
+
+            // Draw speedometer arc
+            drawArc(
+                color = Color.White.copy(alpha = 0.3f),
+                startAngle = 150f,
+                sweepAngle = 240f,
+                useCenter = false,
+                topLeft = Offset(center.x - radius, center.y - radius),
+                size = Size(radius * 2, radius * 2),
+                style = Stroke(width = 4f)
+            )
+
+            // Draw tick marks
+            for (i in 0..220 step 20) {
+                val angle = 150f + (i.toFloat() / 220f) * 240f
+                val tickLength = if (i % 40 == 0) 20f else 10f
+                val start = Offset(
+                    center.x + radius * 0.9f * cos(angle * (PI / 180f)).toFloat(),
+                    center.y + radius * 0.9f * sin(angle * (PI / 180f)).toFloat()
+                )
+                val end = Offset(
+                    center.x + (radius * 0.9f - tickLength) * cos(angle * (PI / 180f)).toFloat(),
+                    center.y + (radius * 0.9f - tickLength) * sin(angle * (PI / 180f)).toFloat()
+                )
+
+                drawLine(
+                    color = Color.White,
+                    start = start,
+                    end = end,
+                    strokeWidth = 2f
+                )
+
+                // Add numbers for major ticks
+                if (i % 40 == 0) {
+                    drawContext.canvas.nativeCanvas.apply {
+                        drawText(
+                            i.toString(),
+                            center.x + (radius * 0.7f) * cos(angle * (PI / 180f)).toFloat() - 10f,
+                            center.y + (radius * 0.7f) * sin(angle * (PI / 180f)).toFloat() + 5f,
+                            android.graphics.Paint().apply {
+                                color = android.graphics.Color.WHITE
+                                textSize = 24f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Draw needle
+            val needleAngle = 150f + (currentSpeed.toFloat() / 220f) * 240f
+            val needleLength = radius * 0.8f
+            drawLine(
+                color = Color.Red,
+                start = center,
+                end = Offset(
+                    center.x + needleLength * cos(needleAngle * (PI / 180f)).toFloat(),
+                    center.y + needleLength * sin(needleAngle * (PI / 180f)).toFloat()
+                ),
+                strokeWidth = 4f
+            )
+
+            // Draw center circle
+            drawCircle(
+                color = Color.Red,
+                radius = 8f,
+                center = center
+            )
+        }
+
+        // Display current speed numerically
+
+    }
+}
 
 
 @Composable
@@ -83,8 +195,9 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState
     val appWidgetManager = AppWidgetManager.getInstance(context)
     val appWidgetHost = remember { AppWidgetHost(context, viewModel.APPWIDGET_HOST_ID) }
-
-    // 🔄 Launchers
+    val locationState = rememberVehicleLocationState()
+    //val kmhSpeed = speed * 3.6f // Convert m/s to km/h
+    //var currentSpeed by remember { mutableStateOf(locationState.speed * 3.6f) } // Default dummy value
     val configureLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -210,7 +323,7 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                             pickWidgetLauncher.launch(intent)
                             return@WidgetsDropdownMenu
                         }
-                        viewModel.handleMenuAction(action)
+                        viewModel.handleMenuAction(action,context)
                     })
             }
 
@@ -222,18 +335,46 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                     })
             }
 
-            Row(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 ShowAnalogClock(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(0.35F)
+                        .wrapContentSize()
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1F)) {
-                    MusicUi(viewModel)
+                MusicUi(viewModel)
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    Box(modifier = Modifier.size(260.dp)){
+                        AnalogSpeedometer(currentSpeed = (locationState.speed * 3.6f).toInt())
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "${(locationState.speed * 3.6f).toInt()} km/h",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+
+                    // Controls to test the speedometer (remove in production)
+              /*      Row {
+                        Button(onClick = { if (currentSpeed > 0) currentSpeed -= 10 }) {
+                            Text("Decrease")
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Button(onClick = { if (currentSpeed < 220) currentSpeed += 10 }) {
+                            Text("Increase")
+                        }
+                    }*/
                 }
+                /*Box(modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp))
+                    .weight(1F)) {
+
+                }*/
             }
             MultiWidgetCanvas(
                 widgetItems = uiState.widgetItems,
@@ -409,22 +550,7 @@ fun NowPlayingObserver(viewModel: DashboardViewModel) {
     DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                Log.e("fdjgbguifdgbkufdn", "onReceive:  data received $intent")
                 viewModel.updateNowPlayingInfo()
-                /*intent?.let {
-                    it.getStringExtra("title")
-                    it.getStringExtra("artist")
-                    val artworkPath = it.getStringExtra("artwork_path")
-                    artworkPath?.let { path ->
-                        try {
-                            BitmapFactory.decodeFile(path)
-                        } catch (e: Exception) {
-                            Log.e("NowPlayingReceiver", "❌ Failed to decode artwork: $e")
-                            null
-                        }
-                    }
-
-                }*/
             }
         }
 

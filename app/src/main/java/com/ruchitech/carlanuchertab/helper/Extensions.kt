@@ -2,6 +2,7 @@ package com.ruchitech.carlanuchertab.helper
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -88,4 +89,33 @@ fun isNotificationListenerEnabled(context: Context): Boolean {
     )
 
     return enabledListeners?.contains(packageName) == true
+}
+
+fun openNotificationAccessSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    context.startActivity(intent)
+}
+
+fun isAccessibilityEnabled(context: Context): Boolean {
+    val accessibilityEnabled = Settings.Secure.getInt(
+        context.contentResolver,
+        Settings.Secure.ACCESSIBILITY_ENABLED,
+        0
+    ) == 1
+
+    if (accessibilityEnabled) {
+        val services = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        )
+        return services?.contains(context.packageName) == true
+    }
+    return false
+}
+
+fun enableAccessibilityService(context: Context) {
+    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    context.startActivity(intent)
 }

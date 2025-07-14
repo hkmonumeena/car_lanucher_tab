@@ -1,10 +1,16 @@
 package com.ruchitech.carlanuchertab
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.location.GnssStatus
 import android.location.Location
+import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -41,6 +47,7 @@ import androidx.core.content.ContextCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.google.android.gms.location.Granularity
 import com.google.android.gms.location.LocationAvailability
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -96,7 +103,7 @@ class GpsActivity : ComponentActivity() {
 @Composable
 fun GPSMapScreen(mapView: MapView) {
     LocalContext.current
-    val locationState = rememberLocationState()
+    val locationState = rememberVehicleLocationState()
     var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
 
     // Request location permission
@@ -155,62 +162,123 @@ fun GPSMapScreen(mapView: MapView) {
 }
 
 @Composable
-fun rememberLocationState(): LocationState {
+fun rememberVehicleLocationState(): LocationState {
     val context = LocalContext.current
     val locationState = remember { LocationState() }
 
     DisposableEffect(Unit) {
         val locationClient = LocationServices.getFusedLocationProviderClient(context)
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+        // Request accurate location updates
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
-            1000 // Update interval in ms
+            1000
         ).apply {
             setMinUpdateIntervalMillis(500)
+            setMinUpdateDistanceMeters(2f)
             setWaitForAccurateLocation(true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                setGranularity(Granularity.GRANULARITY_FINE)
+            }
         }.build()
 
+        // GNSS Satellite tracking
+        val gnssCallback = object : GnssStatus.Callback() {
+            override fun onSatelliteStatusChanged(status: GnssStatus) {
+                val satellitesInUse = (0 until status.satelliteCount).count { status.usedInFix(it) }
+                locationState.satellites = satellitesInUse
+            }
+        }
+
+        // Location update callback
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                result.locations.lastOrNull()?.let { location ->
-                    locationState.updateLocation(location)
+                result.lastLocation?.let { location ->
+                    // Stricter filters for better accuracy
+                    if (location.accuracy < 15f &&
+                        location.hasSpeed() &&
+                        location.speedAccuracyMetersPerSecond < 1.5f
+                    ) {
+                        locationState.updateLocation(location)
+                    }
                 }
             }
 
             override fun onLocationAvailability(availability: LocationAvailability) {
-                locationState.hasFix = availability.isLocationAvailable
+                if (!availability.isLocationAvailable) {
+                    locationState.reset()
+                }
             }
         }
 
-        if (ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            locationClient.requestLocationUpdates(
-                locationRequest,
-                locationCallback,
-                Looper.getMainLooper()
-            )
+        if (hasLocationPermission(context)) {
+            try {
+                // Request updates
+                locationClient.requestLocationUpdates(
+                    locationRequest,
+                    locationCallback,
+                    Looper.getMainLooper()
+                )
+                locationManager.registerGnssStatusCallback(
+                    gnssCallback,
+                    Handler(Looper.getMainLooper())
+                )
+            } catch (e: Exception) {
+                Log.e("Location", "Error requesting location updates", e)
+            }
         }
 
         onDispose {
             locationClient.removeLocationUpdates(locationCallback)
+            locationManager.unregisterGnssStatusCallback(gnssCallback)
         }
     }
 
     return locationState
 }
 
+private fun hasLocationPermission(context: Context): Boolean {
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+}
 
 class LocationState {
     var currentLocation by mutableStateOf<Location?>(null)
-    var speed by mutableStateOf(0f)  // in m/s
+    var speed by mutableStateOf(0f)
+    var speedAccuracy by mutableStateOf(0f)
     var hasFix by mutableStateOf(false)
+    var gpsAccuracy by mutableStateOf(0f)
+    var satellites by mutableStateOf(0)
+
+    private var lastSmoothedSpeed = 0f
 
     fun updateLocation(location: Location) {
         currentLocation = location
-        speed = location.speed
-        hasFix = location.accuracy < 20f  // Considered good fix if accuracy < 20m
+
+        // Convert speed (m/s to km/h)
+        val newSpeed = location.speed * 3.6f
+        val alpha = 0.3f // smoothing factor
+        lastSmoothedSpeed = alpha * newSpeed + (1 - alpha) * lastSmoothedSpeed
+        speed = lastSmoothedSpeed
+
+        speedAccuracy = location.speedAccuracyMetersPerSecond * 3.6f
+        gpsAccuracy = location.accuracy
+        hasFix = gpsAccuracy < 15f && speedAccuracy < 2f
+
+        // Satellites handled in GNSS callback
+    }
+
+    fun reset() {
+        currentLocation = null
+        speed = 0f
+        hasFix = false
+        gpsAccuracy = 0f
+        speedAccuracy = 0f
+        lastSmoothedSpeed = 0f
+        satellites = 0
     }
 }
 

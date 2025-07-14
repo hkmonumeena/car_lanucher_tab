@@ -1,7 +1,6 @@
 package com.ruchitech.carlanuchertab
 
 
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -16,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.compose.rememberNavController
+import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
+import com.ruchitech.carlanuchertab.helper.openNotificationAccessSettings
 import com.ruchitech.carlanuchertab.ui.navigationstack.NavigationGraph
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -38,6 +39,10 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, true)
         window.statusBarColor = resources.getColor(R.color.transparent)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
+        if (!isNotificationListenerEnabled(this)) {
+            openNotificationAccessSettings(this)
+            return
+        }
 
         setContent {
             val navController = rememberNavController()

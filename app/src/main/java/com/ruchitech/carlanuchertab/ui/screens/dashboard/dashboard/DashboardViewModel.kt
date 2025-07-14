@@ -17,6 +17,8 @@ import com.ruchitech.carlanuchertab.WidgetItem
 import com.ruchitech.carlanuchertab.helper.NowPlayingInfo
 import com.ruchitech.carlanuchertab.helper.VoiceCommandHelper
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
+import com.ruchitech.carlanuchertab.helper.enableAccessibilityService
+import com.ruchitech.carlanuchertab.helper.isAccessibilityEnabled
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.state.DashboardUiState
@@ -302,7 +304,7 @@ class DashboardViewModel @Inject constructor(
         _uiState.value = current.copy(showWallpaper = false)
     }
 
-    fun handleMenuAction(action: WidgetMenuAction) {
+    fun handleMenuAction(action: WidgetMenuAction,context:Context) {
         when (action) {
             WidgetMenuAction.AddWidget -> TODO()
             WidgetMenuAction.EditWidgets -> toggleEditMode()
@@ -310,7 +312,10 @@ class DashboardViewModel @Inject constructor(
             WidgetMenuAction.Fuels -> TODO()
             WidgetMenuAction.RemoveAllWidgets -> clearWidgets()
             WidgetMenuAction.Snowfall -> {
-                _uiState.value = _uiState.value.copy(isSnowfall = !_uiState.value.isSnowfall)
+               // _uiState.value = _uiState.value.copy(isSnowfall = !_uiState.value.isSnowfall)
+                if (!isAccessibilityEnabled(context)){
+                    enableAccessibilityService(context)
+                }
             }
 
             WidgetMenuAction.Wallpapers -> {

@@ -2,6 +2,7 @@ package com.ruchitech.carlanuchertab.clock
 
 import android.R.attr.top
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -49,6 +50,7 @@ fun ShowAnalogClock(modifier: Modifier) {
             modifier = Modifier
                 .align(alignment = Alignment.Center)
                 .padding(top = 80.dp)
+
         ) {
             Text(
                 text = getCurrentDateFormatted(), style = TextStyle(
