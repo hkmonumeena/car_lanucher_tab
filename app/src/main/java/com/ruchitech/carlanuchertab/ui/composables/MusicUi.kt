@@ -157,13 +157,13 @@ fun MusicUi(viewModel: DashboardViewModel) {
 
 
     Box(
-        modifier = Modifier.width(300.dp).fillMaxHeight()
+        modifier = Modifier.width(400.dp).fillMaxHeight()
             .border(1.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp)),
         contentAlignment = Alignment.TopCenter
 
     ) {
         // Dimmed background artwork
-        nowPlaying?.artwork?.let { artwork ->
+       /* nowPlaying?.artwork?.let { artwork ->
             Image(
                 bitmap = artwork.asImageBitmap(),
                 contentDescription = null,
@@ -174,7 +174,7 @@ fun MusicUi(viewModel: DashboardViewModel) {
                     .alpha(0.8f) // Adjust opacity here (0.2f = 20% opacity)
                     .blur(radius = 12.dp) // Add blur effect
             )
-        }
+        }*/
         nowPlaying?.let { music ->
             Column(
                 modifier = Modifier.fillMaxSize()/*.height(300.dp)*/.pointerInput(Unit) {
@@ -191,7 +191,7 @@ fun MusicUi(viewModel: DashboardViewModel) {
                 verticalArrangement = Arrangement.Top
             ) {
                 Box(
-                    modifier = Modifier.size(220.dp).graphicsLayer {
+                    modifier = Modifier.size(300.dp).graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                     }.clip(RoundedCornerShape(12.dp)).shadow(
@@ -207,10 +207,10 @@ fun MusicUi(viewModel: DashboardViewModel) {
                             bitmap = it.asImageBitmap(),
                             contentDescription = "Album Art",
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.size(220.dp)
+                            modifier = Modifier.size(300.dp)
                         )
                     } ?: Box(
-                        modifier = Modifier.size(220.dp).background(
+                        modifier = Modifier.size(300.dp).background(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
                                         White.copy(alpha = 0.85f), White.copy(alpha = 0.6f)
