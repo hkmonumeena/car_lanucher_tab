@@ -1,6 +1,5 @@
 package com.ruchitech.carlanuchertab.ui.screens.dashboard
 
-import android.R.attr.textSize
 import android.app.Activity
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
@@ -14,12 +13,12 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -36,10 +35,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
@@ -66,9 +66,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Color.Companion.White
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -84,12 +81,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.registerReceiver
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.idapgroup.snowfall.snowfall
+import com.ruchitech.carlanuchertab.ClickedViewPrefs
 import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.WidgetItem
 import com.ruchitech.carlanuchertab.clock.ShowAnalogClock
 import com.ruchitech.carlanuchertab.helper.MusicNotificationListener
+import com.ruchitech.carlanuchertab.helper.NavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.rememberVehicleLocationState
+import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
 import com.ruchitech.carlanuchertab.ui.composables.ModalWallpaper
 import com.ruchitech.carlanuchertab.ui.composables.MusicUi
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
@@ -188,9 +188,69 @@ fun AnalogSpeedometer(
     }
 }
 
+@Composable
+fun ClickedViewsScreen(context: Context = LocalContext.current) {
+    var clickedViews by remember { mutableStateOf(ClickedViewPrefs.getClickedViews(context)) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Clicked Views",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        if (clickedViews.isEmpty()) {
+            Text("No views clicked yet.")
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                items(clickedViews) { view ->
+                    Text(
+                        text = view,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .background(Color.LightGray)
+                            .padding(8.dp)
+                            .fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Button(onClick = {
+                clickedViews = ClickedViewPrefs.getClickedViews(context)
+            }) {
+                Text("Refresh")
+            }
+
+            Button(onClick = {
+                ClickedViewPrefs.clearClickedViews(context)
+                clickedViews = emptyList()
+            }) {
+                Text("Clear Views")
+            }
+        }
+    }
+}
+
+
 
 @Composable
-fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel(),onNavigated:(bottomNavItem: NavItem)-> Unit) {
     val context = LocalContext.current
     val uiState by viewModel.uiState
     val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -294,6 +354,9 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
+
+
+
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -336,17 +399,63 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel()) {
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                ShowAnalogClock(
-                    modifier = Modifier
-                        .wrapContentSize()
-                )
+                Box(modifier = Modifier.fillMaxHeight()) {
+                    Box(
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .background(Color(0x00000000))
+                            .align(alignment = Alignment.BottomCenter),
+                    ) {
+                        HomeBottomIcons(onClick = { bottomNavItem ->
+                            when(bottomNavItem){
+                                NavItem.AllApps ->{
+
+                                }
+                                NavItem.Fuel -> TODO()
+                                NavItem.Map -> TODO()
+                                NavItem.Music -> {
+                                    val packageName = "in.krosbits.musicolet"
+                                    val launchIntent =
+                                        context.packageManager.getLaunchIntentForPackage(packageName)
+                                    if (launchIntent != null) {
+                                        context.startActivity(launchIntent)
+                                    } else {
+                                        Toast.makeText(
+                                            context, "App not installed", Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                                NavItem.Radio -> {
+                                    val packageName = "com.tw.radio"
+                                    val launchIntent =
+                                        context.packageManager.getLaunchIntentForPackage(packageName)
+                                    if (launchIntent != null) {
+                                        context.startActivity(launchIntent)
+                                    } else {
+                                        onNavigated(bottomNavItem)
+                                        Toast.makeText(
+                                            context, "App not installed", Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            }
+                        })
+                    }
+
+                    ShowAnalogClock(
+                        modifier = Modifier
+                            .wrapContentSize()
+                    )
+                }
+
                 Spacer(modifier = Modifier.width(10.dp))
+
                 MusicUi(viewModel)
-                Column(
+
+                Box(
                     modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Top
                 ) {
+
                     Box(modifier = Modifier.size(260.dp)){
                         AnalogSpeedometer(currentSpeed = (locationState.speed * 3.6f).toInt())
                     }
@@ -357,6 +466,17 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.padding(top = 10.dp)
                     )
+
+                    Box(
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .align(alignment = Alignment.BottomCenter)
+                            .fillMaxHeight()
+                            .background(Color(0x00000000)) // Semi-transparent black background
+                    ) {
+
+                    }
+
 
                     // Controls to test the speedometer (remove in production)
               /*      Row {

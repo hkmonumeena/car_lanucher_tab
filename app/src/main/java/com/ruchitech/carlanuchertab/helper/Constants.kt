@@ -3,18 +3,18 @@ package com.ruchitech.carlanuchertab.helper
 import com.ruchitech.carlanuchertab.R
 
 
-sealed class BottomNavItem(
+sealed class NavItem(
     val iconRes: Int,
     val label: String
 ) {
-    object Map : BottomNavItem(R.drawable.map, "Map")
-    object Radio : BottomNavItem(R.drawable.radio, "Radio")
-    object Music : BottomNavItem(R.drawable.music, "Music")
-    object Fuel : BottomNavItem(R.drawable.add_fuel, "Fuel")
-    object AllApps : BottomNavItem(R.drawable.apps, "All Apps")
+    object Map : NavItem(R.drawable.map, "Map")
+    object Radio : NavItem(R.drawable.radio, "Radio")
+    object Music : NavItem(R.drawable.music, "Music")
+    object Fuel : NavItem(R.drawable.add_fuel, "Fuel")
+    object AllApps : NavItem(R.drawable.apps, "All Apps")
 
     companion object {
-        val allItems = listOf(Map, Radio, Music ,AllApps)
+        val allItems = listOf(Radio, Music )
     }
 }
 
@@ -32,7 +32,7 @@ sealed class WidgetMenuAction {
     }
 }
 
-val bottomNavItems = BottomNavItem.allItems
+val navItems = NavItem.allItems
 
 val wallpapers = listOf(
     R.drawable.launcher_bg1,

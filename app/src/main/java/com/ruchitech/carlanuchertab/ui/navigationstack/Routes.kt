@@ -7,7 +7,7 @@ sealed class Screen {
     @Serializable
     data object Home : Screen()
     @Serializable
-    data class Profile(val userId: String) : Screen()
+    data object Apps : Screen()
     @Serializable
     data object Settings : Screen()
 }

@@ -1,6 +1,5 @@
 package com.ruchitech.carlanuchertab.ui.composables
 
-import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,49 +9,40 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
-import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.ruchitech.carlanuchertab.AppsActivity
-import com.ruchitech.carlanuchertab.MainActivity
-import com.ruchitech.carlanuchertab.helper.BottomNavItem
-import com.ruchitech.carlanuchertab.helper.bottomNavItems
+import com.ruchitech.carlanuchertab.helper.NavItem
+import com.ruchitech.carlanuchertab.helper.navItems
 
 @Composable
-fun HomeBottomIcons(onClick:(bottomNavItem: BottomNavItem)-> Unit){
-    Row(
+fun HomeBottomIcons(onClick:(navItem: NavItem)-> Unit){
+    Row  (
         modifier = Modifier
             .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = CenterVertically
+
     ) {
-        bottomNavItems.forEach { item ->
-
-            /*  IconButton(onClick = {
-                  sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-              }) {
-                  Icon(Icons.Default.PlayArrow, contentDescription = "Play/Pause")
-              }*/
-
-            Column(
-               horizontalAlignment = CenterHorizontally,
+        navItems.forEach { item ->
+            Column (
+                horizontalAlignment = CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .padding(horizontal = 15.dp)
                     .width(80.dp)
+                    .padding(vertical = 5.dp)
                     .clickable {
                         onClick(item)
                     }
@@ -61,7 +51,7 @@ fun HomeBottomIcons(onClick:(bottomNavItem: BottomNavItem)-> Unit){
                     modifier = Modifier
                         .size(60.dp) // Size of the circle
                         .background(
-                            color = if (item is BottomNavItem.AllApps) Color(0xFF2C2C2E) else Color.White,
+                            color = if (item is NavItem.AllApps) Color(0xFF2C2C2E) else Color.White,
                             shape = CircleShape
                         )
                         .border(
@@ -75,7 +65,7 @@ fun HomeBottomIcons(onClick:(bottomNavItem: BottomNavItem)-> Unit){
                     Image(
                         painter = painterResource(id = item.iconRes),
                         contentDescription = item.label,
-                        colorFilter = if (item is BottomNavItem.AllApps) ColorFilter.tint(Color.White) else ColorFilter.tint(
+                        colorFilter = if (item is NavItem.AllApps) ColorFilter.tint(Color.White) else ColorFilter.tint(
                             Color.Black
                         ),
                         modifier = Modifier.size(24.dp)

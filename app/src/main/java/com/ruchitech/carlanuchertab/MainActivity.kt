@@ -3,6 +3,7 @@ package com.ruchitech.carlanuchertab
 
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.RequiresApi
@@ -11,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -18,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
 import com.ruchitech.carlanuchertab.helper.openNotificationAccessSettings
 import com.ruchitech.carlanuchertab.ui.navigationstack.NavigationGraph
+import com.ruchitech.carlanuchertab.ui.navigationstack.Screen
 import dagger.hilt.android.AndroidEntryPoint
 
 
@@ -36,7 +39,7 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = resources.getColor(R.color.transparent)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
         if (!isNotificationListenerEnabled(this)) {
@@ -46,6 +49,29 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val navController = rememberNavController()
+            LaunchedEffect(Unit) {
+                ClickedViewBus.clickedViews.collect { viewId ->
+                    Log.e("ihbygyigbiyh", "onCreate: $viewId")
+                    when (viewId) {
+                        "com.android.systemui:id/home" -> {
+                            navController.navigate(Screen.Home) {
+                                popUpTo(0) { inclusive = true } // Clears the entire back stack
+                                launchSingleTop =
+                                    true          // Prevents multiple copies of the destination
+                            }
+                        }
+
+                        "com.android.systemui:id/apps" -> {
+                            navController.navigate(Screen.Apps) {
+                                launchSingleTop =
+                                    true          // Prevents multiple copies of the destination
+                            }
+                        }
+
+                    }
+                }
+            }
+
             MaterialTheme {
                 calculateWindowSizeClass(this)
                 Surface(modifier = Modifier.fillMaxSize()) {

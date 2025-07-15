@@ -3,9 +3,8 @@ package com.ruchitech.carlanuchertab
 import android.app.Application
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.util.Log
+import com.ruchitech.carlanuchertab.ui.screens.apps.AppInfo
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

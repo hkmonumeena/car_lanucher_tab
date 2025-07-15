@@ -1,6 +1,5 @@
 package com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard
 
-import android.R.attr.duration
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -18,13 +17,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -61,7 +57,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -78,15 +73,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -96,7 +87,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -104,11 +94,10 @@ import androidx.palette.graphics.Palette
 import com.idapgroup.snowfall.snowfall
 import com.ruchitech.carlanuchertab.AppsActivity
 import com.ruchitech.carlanuchertab.GpsActivity
-import com.ruchitech.carlanuchertab.MainActivity
 import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.WidgetItem
 import com.ruchitech.carlanuchertab.clock.ShowAnalogClock
-import com.ruchitech.carlanuchertab.helper.BottomNavItem
+import com.ruchitech.carlanuchertab.helper.NavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
 import com.ruchitech.carlanuchertab.helper.wallpapers
@@ -118,13 +107,11 @@ import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogsEntry
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogsList
 import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
-import com.ruchitech.carlanuchertab.ui.composables.ThinSlider
 import com.ruchitech.carlanuchertab.ui.composables.Wallpaper
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.math.pow
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -921,7 +908,7 @@ fun LauncherHomeScreen(
         ) {
             HomeBottomIcons(onClick = { bottomNavItem ->
                 when (bottomNavItem) {
-                    is BottomNavItem.Map -> {
+                    is NavItem.Map -> {
                         context.startActivity(
                             Intent(
                                 context, GpsActivity::class.java
@@ -929,7 +916,7 @@ fun LauncherHomeScreen(
                         )
                     }
 
-                    is BottomNavItem.Radio -> {
+                    is NavItem.Radio -> {
                         val packageName = "com.tw.radio"
                         val launchIntent =
                             context.packageManager.getLaunchIntentForPackage(packageName)
@@ -942,7 +929,7 @@ fun LauncherHomeScreen(
                         }
                     }
 
-                    is BottomNavItem.Music -> {
+                    is NavItem.Music -> {
                         val packageName = "in.krosbits.musicolet"
                         val launchIntent =
                             context.packageManager.getLaunchIntentForPackage(packageName)
@@ -955,11 +942,11 @@ fun LauncherHomeScreen(
                         }
                     }
 
-                    is BottomNavItem.Fuel -> {
+                    is NavItem.Fuel -> {
                         showFuelDialog = true
                     }
 
-                    is BottomNavItem.AllApps -> {
+                    is NavItem.AllApps -> {
                         context.startActivity(
                             Intent(
                                 context, AppsActivity::class.java
