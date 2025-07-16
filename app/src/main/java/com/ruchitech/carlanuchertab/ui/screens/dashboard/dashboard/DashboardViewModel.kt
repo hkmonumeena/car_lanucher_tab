@@ -304,6 +304,26 @@ class DashboardViewModel @Inject constructor(
         _uiState.value = current.copy(showWallpaper = false)
     }
 
+    fun hideFuelLogsModal() {
+        val current = _uiState.value
+        _uiState.value = current.copy(showFuelLogs = false)
+    }
+
+    fun showFuelLogsModal() {
+        val current = _uiState.value
+        _uiState.value = current.copy(showFuelLogs = true, addFuelLog =  false)
+    }
+
+    fun addFuelLog() {
+        val current = _uiState.value
+        _uiState.value = current.copy(addFuelLog = true, showFuelLogs = false)
+    }
+
+    fun hideAddFuelLogDialog() {
+        val current = _uiState.value
+        _uiState.value = current.copy(addFuelLog = false)
+    }
+
     fun handleMenuAction(action: WidgetMenuAction,context:Context) {
         when (action) {
             WidgetMenuAction.AddWidget -> TODO()
@@ -312,9 +332,10 @@ class DashboardViewModel @Inject constructor(
             WidgetMenuAction.Fuels -> TODO()
             WidgetMenuAction.RemoveAllWidgets -> clearWidgets()
             WidgetMenuAction.Snowfall -> {
-               // _uiState.value = _uiState.value.copy(isSnowfall = !_uiState.value.isSnowfall)
                 if (!isAccessibilityEnabled(context)){
                     enableAccessibilityService(context)
+                }else{
+                    _uiState.value = _uiState.value.copy(isSnowfall = !_uiState.value.isSnowfall)
                 }
             }
 

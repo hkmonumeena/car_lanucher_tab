@@ -31,7 +31,7 @@ class AppsActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Scaffold { _padding ->
-                    InstalledAppsScreen(modifier = Modifier.padding(_padding))
+                    InstalledAppsScreen(modifier = Modifier.padding(_padding), onBack = {})
                 }
             }
         }

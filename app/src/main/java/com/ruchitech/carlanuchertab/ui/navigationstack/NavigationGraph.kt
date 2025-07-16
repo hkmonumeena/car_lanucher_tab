@@ -21,7 +21,9 @@ fun NavigationGraph(navController: NavHostController) {
 
         composable<Screen.Apps> { backStackEntry ->
             //   val profile = backStackEntry.toRoute<Screen.Profile>()
-            AppUi()
+            AppUi(onBack = {
+                navController.popBackStack()
+            })
         }
 
         composable<Screen.Settings> {

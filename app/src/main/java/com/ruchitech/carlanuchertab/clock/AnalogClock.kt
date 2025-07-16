@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +40,8 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.time.ExperimentalTime
 
 
@@ -68,7 +71,7 @@ fun ShowAnalogClock(modifier: Modifier) {
 @Composable
 fun AnalogClock() {
     Box(
-        modifier = Modifier.padding(15.dp).size(220.dp),
+        modifier = Modifier.padding(15.dp).size(380.dp),
         contentAlignment = Alignment.Center
     ) {
         var time by remember {
@@ -109,73 +112,36 @@ fun AnalogClock() {
         }
 
         Canvas(modifier = Modifier.size(250.dp)) {
-
-       /*     for (angle in 0..60) {
-                rotate(angle * 6f) {
-                    if (angle % 5 == 0) {
-                        drawLine(
-                            color = Color.White,
-                            start = Offset(size.width / 2, 0f),
-                            end = Offset(size.width / 2, 40f),
-                            strokeWidth = 8f
-                        )
-                    } else {
-                        drawLine(
-                            color = Color.White,
-                            start = Offset(size.width / 2, 15f),
-                            end = Offset(size.width / 2, 25f),
-                            strokeWidth = 8f
-                        )
-                    }
-                }
-            }*/
-
-            for (hour in 0 until 12) {
-                val angle = hour * 30f // 12 hours, each 30 degrees apart
-                rotate(angle) {
-                    drawLine(
-                        color = Color.White,
-                        start = Offset(size.width / 2, 0f),
-                        end = Offset(size.width / 2, 18f),
-                        strokeWidth = 5f
-                    )
-                }
+            val radius = size.minDimension / 2.5f // You can adjust this radius as needed
+            val center2 = Offset(size.width / 2, size.height / 2)
+            val textPaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.WHITE
+                textSize = 40f
+                textAlign = android.graphics.Paint.Align.CENTER
+                isAntiAlias = true
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
             }
 
+            for (hour in 1..12) {
+                val angleRad = Math.toRadians((hour * 30 - 90).toDouble()) // Rotate -90 to start from top
+                val x = center2.x + (radius * cos(angleRad)).toFloat()
+                val y = center2.y + (radius * sin(angleRad)).toFloat()
 
-      /*      rotate(time.hour) {
-                drawLine(
-                    color = Color.Yellow,
-                    start = Offset(size.width / 2, size.width / 2),
-                    end = Offset(size.width / 2, 150f),
-                    strokeWidth = 14f
+                drawContext.canvas.nativeCanvas.drawText(
+                    hour.toString(),
+                    x,
+                    y + 15f, // small vertical offset for better alignment
+                    textPaint
                 )
-            }*/
-
-/*            rotate(degrees = time.hour , pivot = Offset(size.width / 2, size.height / 2)) {
-                val center = Offset(size.width / 2, size.height / 2)
-
-                val handLength = size.minDimension / 4
-                val handWidth = 15f
-
-                val path = Path().apply {
-                    // Start at the top of the hand (pointed end)
-                    moveTo(center.x, center.y - handLength) // Tip (points out)
-                    lineTo(center.x - handWidth / 2, center.y) // Bottom-left (connected to center)
-                    lineTo(center.x + handWidth / 2, center.y) // Bottom-right (connected to center)
-                    close()
-                }
-
-                drawPath(path, color = Color.White)
-            }*/
+            }
 
             // Hour hand with 3D effect
-            rotate(time.hour, pivot = center) {
+            rotate(time.hour, pivot = center2) {
                 val path = Path().apply {
-                    moveTo(center.x, center.y - size.minDimension / 4)
-                    lineTo(center.x - 8f, center.y)
-                    lineTo(center.x, center.y + 10f)
-                    lineTo(center.x + 8f, center.y)
+                    moveTo(center2.x, center2.y - size.minDimension / 4)
+                    lineTo(center2.x - 8f, center2.y)
+                    lineTo(center2.x, center2.y + 10f)
+                    lineTo(center2.x + 8f, center2.y)
                     close()
                 }
                 drawPath(
@@ -195,7 +161,7 @@ fun AnalogClock() {
             val smoothMinuteAngle = (time.minute + time.second / 60f)
             rotate(degrees = smoothMinuteAngle, pivot = Offset(size.width / 2, size.height / 2)) {
                 val center = Offset(size.width / 2, size.height / 2)
-                val handLength = size.minDimension / 2.4f  // slightly shorter
+                val handLength = size.minDimension / 2.9f  // slightly shorter
                 val handWidth = 6f                        // slightly wider
 
                 val path = Path().apply {
@@ -210,7 +176,7 @@ fun AnalogClock() {
 
 
             val center = Offset(size.width / 2, size.height / 2)
-            val handLength = size.minDimension / 2.1f
+            val handLength = size.minDimension / 2.5f
             val handWidth = 6f
 
             rotate(degrees = time.second , pivot = center) {

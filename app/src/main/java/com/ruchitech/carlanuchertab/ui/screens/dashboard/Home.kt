@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,7 +44,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -82,18 +80,22 @@ import androidx.core.content.ContextCompat.registerReceiver
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.idapgroup.snowfall.snowfall
 import com.ruchitech.carlanuchertab.ClickedViewPrefs
-import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.WidgetItem
 import com.ruchitech.carlanuchertab.clock.ShowAnalogClock
 import com.ruchitech.carlanuchertab.helper.MusicNotificationListener
 import com.ruchitech.carlanuchertab.helper.NavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.rememberVehicleLocationState
+import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
 import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
 import com.ruchitech.carlanuchertab.ui.composables.ModalWallpaper
 import com.ruchitech.carlanuchertab.ui.composables.MusicUi
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.DashboardViewModel
+import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.FuelLogs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -102,7 +104,7 @@ import kotlin.math.sin
 @Composable
 fun AnalogSpeedometer(
     currentSpeed: Int = 30, // Default dummy value (0-220 km/h)
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
@@ -110,7 +112,9 @@ fun AnalogSpeedometer(
             .height(300.dp),
         contentAlignment = Alignment.TopCenter
     ) {
-        Canvas(modifier = Modifier.fillMaxSize().align(Alignment.TopCenter)) {
+        Canvas(modifier = Modifier
+            .fillMaxSize()
+            .align(Alignment.TopCenter)) {
             val center = Offset(size.width / 2, size.height * 0.9f)
             val radius = size.width * 0.45f
 
@@ -248,9 +252,11 @@ fun ClickedViewsScreen(context: Context = LocalContext.current) {
 }
 
 
-
 @Composable
-fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel(),onNavigated:(bottomNavItem: NavItem)-> Unit) {
+fun HomeScreen(
+    viewModel: DashboardViewModel = hiltViewModel(),
+    onNavigated: (bottomNavItem: NavItem) -> Unit,
+) {
     val context = LocalContext.current
     val uiState by viewModel.uiState
     val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -341,7 +347,6 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel(),onNavigated:(bott
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color.Transparent)
                 .then(
                     if (uiState.isSnowfall) Modifier.snowfall(density = 0.040, alpha = 0.5f)
                     else Modifier
@@ -355,40 +360,49 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel(),onNavigated:(bott
                 contentScale = ContentScale.Crop
             )
 
-
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(10.dp)
-            ) {
-                IconButton(
-                    onClick = { viewModel.toggleSettings() }) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_settings), contentDescription = null
-                    )
-                }
-                WidgetsDropdownMenu(
-                    expanded = uiState.showSettings,
-                    modifier = Modifier
-                        .wrapContentSize()
-                        .align(alignment = Alignment.BottomEnd),
-                    onDismissRequest = {
-                        viewModel.toggleSettings()
-                    },
-                    onMenuAction = { action ->
-                        if (action is WidgetMenuAction.AddWidget) {
-                            val appWidgetId = appWidgetHost.allocateAppWidgetId()
-                            viewModel.currentAppWidgetId = appWidgetId
-                            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
-                                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                            }
-                            pickWidgetLauncher.launch(intent)
-                            return@WidgetsDropdownMenu
+            if (uiState.addFuelLog) {
+                FuelLogDialog(
+                    onDismiss = { viewModel.hideAddFuelLogDialog() },
+                    onSubmit = { newLog ->
+                        CoroutineScope(Dispatchers.IO).launch {
+                            viewModel.dashboardDao.insertLog(newLog)
                         }
-                        viewModel.handleMenuAction(action,context)
                     })
             }
+
+
+            /*            Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp)
+                        ) {
+                            IconButton(
+                                onClick = { viewModel.toggleSettings() }) {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_settings), contentDescription = null
+                                )
+                            }
+                            WidgetsDropdownMenu(
+                                expanded = uiState.showSettings,
+                                modifier = Modifier
+                                    .wrapContentSize()
+                                    .align(alignment = Alignment.BottomEnd),
+                                onDismissRequest = {
+                                    viewModel.toggleSettings()
+                                },
+                                onMenuAction = { action ->
+                                    if (action is WidgetMenuAction.AddWidget) {
+                                        val appWidgetId = appWidgetHost.allocateAppWidgetId()
+                                        viewModel.currentAppWidgetId = appWidgetId
+                                        val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
+                                            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                                        }
+                                        pickWidgetLauncher.launch(intent)
+                                        return@WidgetsDropdownMenu
+                                    }
+                                    viewModel.handleMenuAction(action,context)
+                                })
+                        }*/
 
             if (uiState.showWallpaper) {
                 ModalWallpaper(
@@ -398,21 +412,71 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel(),onNavigated:(bott
                     })
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.fillMaxHeight()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Box(modifier = Modifier
+                    .weight(1F)
+                    .fillMaxSize()) {
+                    MusicUi(viewModel)
+                }
+
+                Box(modifier = Modifier
+                    .weight(1F)
+                    .fillMaxSize()) {
                     Box(
                         modifier = Modifier
                             .wrapContentWidth()
                             .background(Color(0x00000000))
                             .align(alignment = Alignment.BottomCenter),
                     ) {
+
+                        Box(
+                            modifier = Modifier
+                                .align(alignment = Alignment.CenterEnd)
+                                .padding(bottom = 40.dp)
+                        ) {
+                            WidgetsDropdownMenu(
+                                expanded = uiState.showSettings,
+                                modifier = Modifier
+                                    .wrapContentSize()
+                                    .align(alignment = Alignment.BottomEnd),
+                                onDismissRequest = {
+                                    viewModel.toggleSettings()
+                                },
+                                onMenuAction = { action ->
+                                    if (action is WidgetMenuAction.AddWidget) {
+                                        val appWidgetId = appWidgetHost.allocateAppWidgetId()
+                                        viewModel.currentAppWidgetId = appWidgetId
+                                        val intent =
+                                            Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
+                                                putExtra(
+                                                    AppWidgetManager.EXTRA_APPWIDGET_ID,
+                                                    appWidgetId
+                                                )
+                                            }
+                                        pickWidgetLauncher.launch(intent)
+                                        return@WidgetsDropdownMenu
+                                    }
+                                    viewModel.handleMenuAction(action, context)
+                                })
+
+                        }
+
                         HomeBottomIcons(onClick = { bottomNavItem ->
-                            when(bottomNavItem){
-                                NavItem.AllApps ->{
+                            when (bottomNavItem) {
+                                NavItem.AllApps -> {
 
                                 }
-                                NavItem.Fuel -> TODO()
-                                NavItem.Map -> TODO()
+
+                                NavItem.Fuel -> {
+                                    viewModel.showFuelLogsModal()
+                                }
+
+                                NavItem.Map -> {}
                                 NavItem.Music -> {
                                     val packageName = "in.krosbits.musicolet"
                                     val launchIntent =
@@ -425,6 +489,7 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel(),onNavigated:(bott
                                         ).show()
                                     }
                                 }
+
                                 NavItem.Radio -> {
                                     val packageName = "com.tw.radio"
                                     val launchIntent =
@@ -438,57 +503,47 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel(),onNavigated:(bott
                                         ).show()
                                     }
                                 }
+
+                                NavItem.Settings -> {
+                                    viewModel.toggleSettings()
+                                }
                             }
                         })
-                    }
 
+
+                    }
                     ShowAnalogClock(
                         modifier = Modifier
+                            .align(alignment = Alignment.TopCenter)
                             .wrapContentSize()
                     )
                 }
 
-                Spacer(modifier = Modifier.width(10.dp))
+                /*                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                ) {
 
-                MusicUi(viewModel)
+                                    Box(modifier = Modifier.size(260.dp)){
+                                        AnalogSpeedometer(currentSpeed = (locationState.speed * 3.6f).toInt())
+                                    }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "${(locationState.speed * 3.6f).toInt()} km/h",
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        modifier = Modifier.padding(top = 10.dp)
+                                    )
 
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .wrapContentWidth()
+                                            .align(alignment = Alignment.BottomCenter)
+                                            .fillMaxHeight()
+                                            .background(Color(0x00000000)) // Semi-transparent black background
+                                    ) {
 
-                    Box(modifier = Modifier.size(260.dp)){
-                        AnalogSpeedometer(currentSpeed = (locationState.speed * 3.6f).toInt())
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "${(locationState.speed * 3.6f).toInt()} km/h",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(top = 10.dp)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .wrapContentWidth()
-                            .align(alignment = Alignment.BottomCenter)
-                            .fillMaxHeight()
-                            .background(Color(0x00000000)) // Semi-transparent black background
-                    ) {
-
-                    }
-
-
-                    // Controls to test the speedometer (remove in production)
-              /*      Row {
-                        Button(onClick = { if (currentSpeed > 0) currentSpeed -= 10 }) {
-                            Text("Decrease")
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Button(onClick = { if (currentSpeed < 220) currentSpeed += 10 }) {
-                            Text("Increase")
-                        }
-                    }*/
-                }
+                                    }
+                                }*/
                 /*Box(modifier = Modifier
                     .fillMaxWidth()
                     .border(1.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp))
@@ -496,6 +551,22 @@ fun HomeScreen(viewModel: DashboardViewModel = hiltViewModel(),onNavigated:(bott
 
                 }*/
             }
+
+            if (uiState.showFuelLogs) {
+                Box(
+                    modifier = Modifier.align(alignment = Alignment.TopCenter),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    FuelLogs(onClose = {
+                        viewModel.hideFuelLogsModal()
+                    }, onAddNew = {
+                        viewModel.addFuelLog()
+                    }, viewModel)
+                }
+
+            }
+
+
             MultiWidgetCanvas(
                 widgetItems = uiState.widgetItems,
                 widgetHost = appWidgetHost,

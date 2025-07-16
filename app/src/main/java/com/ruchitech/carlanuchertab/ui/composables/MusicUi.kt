@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -44,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -136,7 +139,7 @@ fun formatDuration2(millis: Long): String {
 fun MusicUi(viewModel: DashboardViewModel) {
     val nowPlaying by viewModel.nowPlaying.collectAsState()
     val infiniteTransition = rememberInfiniteTransition(label = "ZoomTransition")
-    remember { MutableInteractionSource() }
+ val interactionSource =  remember { MutableInteractionSource() }
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = if (nowPlaying?.isPlaying == true) 1.05f else 1f,
@@ -157,9 +160,9 @@ fun MusicUi(viewModel: DashboardViewModel) {
 
 
     Box(
-        modifier = Modifier.width(400.dp).fillMaxHeight()
-            .border(1.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp)),
-        contentAlignment = Alignment.TopCenter
+        modifier = Modifier.fillMaxSize()
+           // .border(0.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp)),
+        ,contentAlignment = Alignment.TopCenter
 
     ) {
         // Dimmed background artwork
@@ -267,7 +270,7 @@ fun MusicUi(viewModel: DashboardViewModel) {
                 PlaybackSlider(
                   nowPlaying = music, onPositionChange = { newPosition ->
                         viewModel.seekTo(newPosition)
-                    })/*
+                    })
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -362,7 +365,6 @@ fun MusicUi(viewModel: DashboardViewModel) {
                                         )
                                     }
                                 }
-                */
             }
         }
     }

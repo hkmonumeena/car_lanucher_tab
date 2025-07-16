@@ -953,6 +953,8 @@ fun LauncherHomeScreen(
                             )
                         )
                     }
+
+                    NavItem.Settings -> TODO()
                 }
 
             })

@@ -9,5 +9,7 @@ data class DashboardUiState(
     val isSnowfall: Boolean = false,
     val isEditMode: Boolean = false,
     val showSettings: Boolean = false,
-    val showWallpaper: Boolean = false
+    val showWallpaper: Boolean = false,
+    val showFuelLogs: Boolean = false,
+    val addFuelLog: Boolean = false
 )

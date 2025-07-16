@@ -70,7 +70,7 @@ import kotlinx.coroutines.launch
 import kotlin.collections.filter
 
 @Composable
-fun AppUi(){
+fun AppUi(onBack:()-> Unit){
     DisposableEffect(Unit) {
         onDispose {
             CoroutineScope(Dispatchers.IO).launch {
@@ -80,13 +80,13 @@ fun AppUi(){
     }
     MaterialTheme {
         Scaffold { _padding ->
-            InstalledAppsScreen(modifier = Modifier.padding(_padding))
+            InstalledAppsScreen(modifier = Modifier.padding(_padding),onBack)
         }
     }
 }
 
 @Composable
-fun InstalledAppsScreen(modifier: Modifier) {
+fun InstalledAppsScreen(modifier: Modifier,onBack:()-> Unit) {
     val context = LocalContext.current
     val allApps = remember { mutableStateOf(MyApp.allApps) }
     val searchQuery = remember { mutableStateOf("") }
@@ -185,7 +185,7 @@ fun InstalledAppsScreen(modifier: Modifier) {
                             modifier = Modifier
                                 .size(24.dp)
                                 .clickable(onClick = {
-                                    (context as AppsActivity).finish()
+                                    onBack()
                                 })
                         )
                     }
