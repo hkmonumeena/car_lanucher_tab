@@ -74,6 +74,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.registerReceiver
@@ -112,9 +113,11 @@ fun AnalogSpeedometer(
             .height(300.dp),
         contentAlignment = Alignment.TopCenter
     ) {
-        Canvas(modifier = Modifier
-            .fillMaxSize()
-            .align(Alignment.TopCenter)) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .align(Alignment.TopCenter)
+        ) {
             val center = Offset(size.width / 2, size.height * 0.9f)
             val radius = size.width * 0.45f
 
@@ -346,6 +349,7 @@ fun HomeScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.Black)
                 .padding(padding)
                 .then(
                     if (uiState.isSnowfall) Modifier.snowfall(density = 0.040, alpha = 0.5f)
@@ -353,7 +357,7 @@ fun HomeScreen(
                 )
         ) {
             // 🎨 Wallpaper background from resource
-            Image(
+          if (uiState.wallpaperId!=0)  Image(
                 painter = painterResource(id = uiState.wallpaperId),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
@@ -418,22 +422,17 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                Box(modifier = Modifier
-                    .weight(1F)
-                    .fillMaxSize()) {
-                    MusicUi(viewModel)
-                }
-
-                Box(modifier = Modifier
-                    .weight(1F)
-                    .fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1F)
+                        .fillMaxSize()
+                ) {
                     Box(
                         modifier = Modifier
                             .wrapContentWidth()
                             .background(Color(0x00000000))
                             .align(alignment = Alignment.BottomCenter),
                     ) {
-
                         Box(
                             modifier = Modifier
                                 .align(alignment = Alignment.CenterEnd)
@@ -463,9 +462,7 @@ fun HomeScreen(
                                     }
                                     viewModel.handleMenuAction(action, context)
                                 })
-
                         }
-
                         HomeBottomIcons(onClick = { bottomNavItem ->
                             when (bottomNavItem) {
                                 NavItem.AllApps -> {
@@ -485,7 +482,9 @@ fun HomeScreen(
                                         context.startActivity(launchIntent)
                                     } else {
                                         Toast.makeText(
-                                            context, "App not installed", Toast.LENGTH_SHORT
+                                            context,
+                                            "App not installed",
+                                            Toast.LENGTH_SHORT
                                         ).show()
                                     }
                                 }
@@ -510,15 +509,28 @@ fun HomeScreen(
                             }
                         })
 
-
                     }
                     ShowAnalogClock(
                         modifier = Modifier
                             .align(alignment = Alignment.TopCenter)
                             .wrapContentSize()
                     )
+                    Text(
+                        text = "${(locationState.speed * 3.6f).toInt()} km/h",
+                        color = Color.White,
+                        fontSize = 32.sp,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
                 }
 
+                Box(
+                    modifier = Modifier
+                        .weight(1F)
+                        .fillMaxSize()
+                ) {
+                    MusicUi(viewModel)
+                }
                 /*                Box(
                                     modifier = Modifier.fillMaxSize(),
                                 ) {
@@ -565,7 +577,6 @@ fun HomeScreen(
                 }
 
             }
-
 
             MultiWidgetCanvas(
                 widgetItems = uiState.widgetItems,

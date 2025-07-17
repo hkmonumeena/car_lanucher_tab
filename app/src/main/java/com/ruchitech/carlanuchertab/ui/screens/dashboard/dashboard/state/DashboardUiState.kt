@@ -5,7 +5,7 @@ import com.ruchitech.carlanuchertab.WidgetItem
 
 data class DashboardUiState(
     val widgetItems: List<WidgetItem> = emptyList(),
-    val wallpaperId: Int = R.drawable.launcher_bg7,
+    val wallpaperId: Int = 0,
     val isSnowfall: Boolean = false,
     val isEditMode: Boolean = false,
     val showSettings: Boolean = false,

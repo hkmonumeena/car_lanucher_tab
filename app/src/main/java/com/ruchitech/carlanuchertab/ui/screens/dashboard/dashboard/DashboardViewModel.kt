@@ -6,7 +6,6 @@ import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
-import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
@@ -14,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ruchitech.carlanuchertab.WidgetItem
-import com.ruchitech.carlanuchertab.helper.NowPlayingInfo
 import com.ruchitech.carlanuchertab.helper.VoiceCommandHelper
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.helper.enableAccessibilityService
@@ -24,7 +22,6 @@ import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.state.DashboardUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -111,7 +108,6 @@ class DashboardViewModel @Inject constructor(
     }
 
 
-
     fun playPause() {
         _musicoletController.value?.let {
             val isPlaying = it.playbackState?.state == PlaybackState.STATE_PLAYING
@@ -120,7 +116,7 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    fun next(){
+    fun next() {
         val now = System.currentTimeMillis()
         if (now - lastSkipTime < DEBOUNCE_INTERVAL_MS) {
             Log.d("MediaControl", "⏭ Skipped due to debounce")
@@ -130,6 +126,7 @@ class DashboardViewModel @Inject constructor(
         lastSkipTime = now
         _musicoletController.value?.transportControls?.skipToNext()
     }
+
     fun previous() {
         val now = System.currentTimeMillis()
         if (now - lastSkipTime < DEBOUNCE_INTERVAL_MS) {
@@ -156,6 +153,7 @@ class DashboardViewModel @Inject constructor(
             }
         }
     }
+
     fun initData1(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val dashboard = dashboardDao.getDashboard()
@@ -278,10 +276,22 @@ class DashboardViewModel @Inject constructor(
     fun saveWidgetItems(items: List<WidgetItem>) {
         viewModelScope.launch(Dispatchers.IO) {
             val dashboard = dashboardDao.getDashboard()
+            val current = _uiState.value
             if (dashboard != null) {
-                dashboardDao.updateDashboard(dashboard.copy(widgets = items))
+                dashboardDao.updateDashboard(
+                    dashboard.copy(
+                        widgets = items,
+                        wallpaperId = current.wallpaperId,
+                        isSnowfall = current.isSnowfall
+                    )
+                )
             } else {
-                dashboardDao.insertOrUpdateDashboard(Dashboard(widgets = items))
+                dashboardDao.insertOrUpdateDashboard(
+                    Dashboard(
+                        widgets = items, wallpaperId = current.wallpaperId,
+                        isSnowfall = current.isSnowfall
+                    )
+                )
             }
         }
     }
@@ -311,7 +321,7 @@ class DashboardViewModel @Inject constructor(
 
     fun showFuelLogsModal() {
         val current = _uiState.value
-        _uiState.value = current.copy(showFuelLogs = true, addFuelLog =  false)
+        _uiState.value = current.copy(showFuelLogs = true, addFuelLog = false)
     }
 
     fun addFuelLog() {
@@ -324,7 +334,7 @@ class DashboardViewModel @Inject constructor(
         _uiState.value = current.copy(addFuelLog = false)
     }
 
-    fun handleMenuAction(action: WidgetMenuAction,context:Context) {
+    fun handleMenuAction(action: WidgetMenuAction, context: Context) {
         when (action) {
             WidgetMenuAction.AddWidget -> TODO()
             WidgetMenuAction.EditWidgets -> toggleEditMode()
@@ -332,9 +342,9 @@ class DashboardViewModel @Inject constructor(
             WidgetMenuAction.Fuels -> TODO()
             WidgetMenuAction.RemoveAllWidgets -> clearWidgets()
             WidgetMenuAction.Snowfall -> {
-                if (!isAccessibilityEnabled(context)){
+                if (!isAccessibilityEnabled(context)) {
                     enableAccessibilityService(context)
-                }else{
+                } else {
                     _uiState.value = _uiState.value.copy(isSnowfall = !_uiState.value.isSnowfall)
                 }
             }
