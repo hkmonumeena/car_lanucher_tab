@@ -5,6 +5,7 @@ import android.R.attr.maxLines
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +61,7 @@ fun FuelLogsList(
     fuelLogs: List<FuelLog>,
     onClose: () -> Unit = {},
     onAddNew: () -> Unit = {},
+    onDelete: (FuelLog) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Premium Header
@@ -163,7 +166,7 @@ fun FuelLogsList(
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(fuelLogs) { log ->
-                    PremiumFuelLogItem(log)
+                    PremiumFuelLogItem(log, onDelete = onDelete)
                 }
             }
         }
@@ -171,11 +174,20 @@ fun FuelLogsList(
 }
 
 @Composable
-fun PremiumFuelLogItem(log: FuelLog) {
+fun PremiumFuelLogItem(
+    log: FuelLog,
+    onDelete: (FuelLog) -> Unit // 👈 callback
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp),
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        onDelete(log) // 👈 invoke callback
+                    }
+                )
+            },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(

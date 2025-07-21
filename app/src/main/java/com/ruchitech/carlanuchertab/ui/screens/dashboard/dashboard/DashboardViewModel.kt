@@ -19,6 +19,7 @@ import com.ruchitech.carlanuchertab.helper.enableAccessibilityService
 import com.ruchitech.carlanuchertab.helper.isAccessibilityEnabled
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
+import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.state.DashboardUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -332,6 +333,12 @@ class DashboardViewModel @Inject constructor(
     fun hideAddFuelLogDialog() {
         val current = _uiState.value
         _uiState.value = current.copy(addFuelLog = false)
+    }
+
+    fun deleteFuelLog(fuelLog: FuelLog) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dashboardDao.deleteLog(fuelLog)
+        }
     }
 
     fun handleMenuAction(action: WidgetMenuAction, context: Context) {

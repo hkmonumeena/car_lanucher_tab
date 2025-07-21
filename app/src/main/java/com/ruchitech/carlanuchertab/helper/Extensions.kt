@@ -38,9 +38,10 @@ fun getActiveMediaMetadata(context: Context): MediaMetadata? {
 }
 
 fun getCurrentDateFormatted(): String {
-    val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
+    val dateFormat = SimpleDateFormat("EEEE\ndd MMM", Locale.getDefault())
     return dateFormat.format(Date())
 }
+
 
 fun createFuelLogEntry(
     rupeeInput: Int?,

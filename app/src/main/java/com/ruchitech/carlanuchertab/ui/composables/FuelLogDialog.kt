@@ -505,7 +505,8 @@ fun FuelLogDialog(
     // Background dimming
     BackHandler(enabled = true, onBack = onDismiss)
     Dialog(
-        onDismissRequest = onDismiss, properties = DialogProperties(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnClickOutside = false,
             dismissOnBackPress = false
@@ -513,7 +514,7 @@ fun FuelLogDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
+                .fillMaxWidth(0.7f)
                 .padding(16.dp),
             shape = RoundedCornerShape(24.dp),
             shadowElevation = 24.dp,

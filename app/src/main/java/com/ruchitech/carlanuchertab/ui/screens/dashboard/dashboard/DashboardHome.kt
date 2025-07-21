@@ -12,7 +12,6 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -115,17 +114,15 @@ import kotlinx.coroutines.launch
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun DashboardHome(viewModel: DashboardViewModel) {
-/*
-    val context = LocalContext.current as MainActivity
+fun DashboardHome(viewModel: DashboardViewModel) {/*
+        val context = LocalContext.current as MainActivity
 
-    LauncherHomeScreen(
-        wallpaper = viewModel.setWallpaper,
-        onAddWidget = {
-            */
-/*       viewModel.launchWidgetPicker(launchWidget = {
-                       context.pickWidget.launch(it)
-                   })*//*
+        LauncherHomeScreen(
+            wallpaper = viewModel.setWallpaper,
+            onAddWidget = {
+                *//*       viewModel.launchWidgetPicker(launchWidget = {
+                           context.pickWidget.launch(it)
+                       })*//*
 
         },
         widgetItems = viewModel.widgetItems,
@@ -152,430 +149,14 @@ fun NowPlayingWidget(
     viewModel: DashboardViewModel,
     modifier: Modifier = Modifier,
 ) {
-   // val nowPlaying by viewModel.nowPlaying
-/*    val isPlaying by viewModel.isPlaying
-    val position by viewModel.playbackPosition
-    val duration by viewModel.playbackDuration*/
+    // val nowPlaying by viewModel.nowPlaying
+    /*    val isPlaying by viewModel.isPlaying
+        val position by viewModel.playbackPosition
+        val duration by viewModel.playbackDuration*/
 
     // State for slider while dragging
-    var sliderPosition by remember { mutableStateOf(0f) }
-    var isUserSeeking by remember { mutableStateOf(false) }
-/*
-    LaunchedEffect(position, duration) {
-        if (!isUserSeeking && duration > 0L) {
-            sliderPosition = position.toFloat() / duration
-        }
-    }*/
-    val interactionSource = remember { MutableInteractionSource() }
+    remember { MutableInteractionSource() }
     val infiniteTransition = rememberInfiniteTransition(label = "ZoomTransition")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (true) 1.05f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "ZoomScale"
-    )
-/*    val dominantColor by remember(nowPlaying.artwork) {
-        mutableStateOf(
-            nowPlaying.artwork?.let { artwork ->
-                extractDominantColor(artwork.asImageBitmap().asAndroidBitmap())
-                    ?.let { color ->
-                        // Convert to linear RGB space for accurate luminance calculation
-                        val linearRed = if (color.red <= 0.04045f) {
-                            color.red / 12.92f
-                        } else {
-                            ((color.red + 0.055f) / 1.055f).toDouble().pow(2.4).toFloat()
-                        }
-
-                        val linearGreen = if (color.green <= 0.04045f) {
-                            color.green / 12.92f
-                        } else {
-                            ((color.green + 0.055f) / 1.055f).toDouble().pow(2.4).toFloat()
-                        }
-
-                        val linearBlue = if (color.blue <= 0.04045f) {
-                            color.blue / 12.92f
-                        } else {
-                            ((color.blue + 0.055f) / 1.055f).toDouble().pow(2.4).toFloat()
-                        }
-
-                        // Calculate perceptual luminance (CIE 1931 standard)
-                        val luminance =
-                            0.2126f * linearRed + 0.7152f * linearGreen + 0.0722f * linearBlue
-
-                        // Adjust color based on luminance and saturation
-                        if (luminance > 0.7f) {
-                            // For bright colors, reduce brightness but maintain saturation
-                            val hsv = FloatArray(3)
-                            android.graphics.Color.RGBToHSV(
-                                (color.red * 255).toInt(),
-                                (color.green * 255).toInt(),
-                                (color.blue * 255).toInt(),
-                                hsv
-                            )
-                            hsv[2] = hsv[2] * 0.7f // Reduce value (brightness)
-                            val adjustedColor = android.graphics.Color.HSVToColor(hsv)
-                            Color(adjustedColor).copy(alpha = 0.8f)
-                        } else if (luminance < 0.2f) {
-                            // For very dark colors, lighten them slightly
-                            val hsv = FloatArray(3)
-                            android.graphics.Color.RGBToHSV(
-                                (color.red * 255).toInt(),
-                                (color.green * 255).toInt(),
-                                (color.blue * 255).toInt(),
-                                hsv
-                            )
-                            hsv[2] = hsv[2].coerceAtLeast(0.3f) // Ensure minimum brightness
-                            val adjustedColor = android.graphics.Color.HSVToColor(hsv)
-                            Color(adjustedColor).copy(alpha = 0.8f)
-                        } else {
-                            color.copy(alpha = 0.8f)
-                        }
-                    }
-            } ?: Color(0xFF5D8BF4) // Fallback color
-        )
-    }
-    if (nowPlaying.title == null && nowPlaying.artist == null) {
-        return
-    }
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 10.dp)
-            .height(300.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        dominantColor.copy(alpha = 0.80f),
-                        dominantColor.copy(alpha = 0.40f)
-                    )
-                )
-            )
-            .border(
-                width = 1.5.dp,
-                color = dominantColor.copy(alpha = 0.20f),
-                shape = RoundedCornerShape(16.dp)
-            )
-    ) {
-        // Glossy overlay effect
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.05f),
-                        Color.Transparent
-                    ),
-                    center = Offset(size.width * 0.7f, size.height * 0.5f),
-                    radius = size.width * 0.6f
-                )
-            )
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(300.dp)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (dragAmount > 30) {
-                        Log.e("ifudgfhjkl", "NowPlayingWidget: Previous")
-                        viewModel.skipToPrevious()
-                    } else if (dragAmount < -30) {
-                        Log.e("ifudgfhjkl", "NowPlayingWidget: Next")
-                        viewModel.skipToNext()
-                    }
-                    change.consume()
-                }
-            }
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            // Artwork with reflection effect
-            Box(
-                modifier = modifier
-                    .size(268.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                    .clip(RoundedCornerShape(12.dp))
-                    .shadow(
-                        elevation = 12.dp,
-                        shape = RoundedCornerShape(12.dp),
-                        spotColor = dominantColor.copy(alpha = 0.80f)
-                    )
-                    .background(Color.Black)
-            ) {
-                nowPlaying.artwork?.let {
-                    Image(
-                        bitmap = it.asImageBitmap(),
-                        contentDescription = "Album Art",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } ?: Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    dominantColor.copy(alpha = 0.85f),
-                                    dominantColor.copy(alpha = 0.6f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.music),
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-
-            Column {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        *//*           .background(
-                                       color = Color(0x801E293B),
-                                       shape = RoundedCornerShape(12.dp)
-                                   )
-                                   .border(
-                                       width = 1.dp,
-                                       color = dominantColor.copy(alpha = 0.2f),
-                                       shape = RoundedCornerShape(12.dp)
-                                   )*//*
-                        .padding(8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = nowPlaying.title ?: "Unknown Track",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                shadow = Shadow(
-                                    color = Color.Black.copy(alpha = 0.5f),
-                                    offset = Offset(1f, 1f),
-                                    blurRadius = 4f
-                                )
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = nowPlaying.artist ?: "Unknown Artist",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                color = Color.White.copy(alpha = 0.8f),
-                                shadow = Shadow(
-                                    color = Color.Black.copy(alpha = 0.3f),
-                                    offset = Offset(1f, 1f),
-                                    blurRadius = 2f
-                                )
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Text(
-                            text = "Unknown Album",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                color = Color.White.copy(alpha = 0.6f)
-                            )
-                        )
-                    }
-                }
-
-                if (duration > 0L) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 10.dp)
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        // White slider
-
-                        ThinSlider(
-                            value = sliderPosition.toFloat(),
-                            onValueChange = { newValue ->
-                                Log.e("fdklhfkdhnfld", "NowPlayingWidget: $newValue")
-                                isUserSeeking = true
-                                sliderPosition = newValue
-                            },
-                            valueRange = 0f..duration.toFloat(),
-                            modifier = Modifier.fillMaxWidth(),
-                            thumbColor = Color.White,
-                            trackColor = Color.White,
-                            onValueChangeFinished = {
-                                val seekMs =
-                                    (sliderPosition * duration).toLong().coerceIn(0L, duration)
-                                viewModel.seekTo(seekMs)
-                                isUserSeeking = false
-                            }
-                        )
-
-
-                        // Time labels below
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            // Current position (left)
-                            Text(
-                                text = formatTime(position),
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-
-                            // Duration (right)
-                            Text(
-                                text = formatTime(duration),
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        }
-                    }
-                }
-
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 15.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Previous Button
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .shadow(
-                                elevation = 0.dp,
-                                shape = CircleShape,
-                                ambientColor = dominantColor
-                            )
-                            .border(
-                                width = 2.dp,
-                                color = Color.White,
-                                shape = CircleShape
-                            )
-                            .clip(CircleShape)
-                            .clickable { viewModel.skipToPrevious() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.skip_song),
-                            contentDescription = "Previous",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .size(28.dp)
-                                .rotate(180F)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(30.dp))
-
-                    // Play/Pause Button
-                    Box(
-                        modifier = Modifier
-                            .size(76.dp)
-                            .border(
-                                width = 2.dp,
-                                color = Color.White,
-                                shape = CircleShape
-                            )
-                            .clip(CircleShape)
-                            .background(dominantColor.copy(alpha = 0.2f))
-                            .clickable(
-                                interactionSource = interactionSource,
-                                indication = ripple(
-                                    bounded = true,
-                                    color = Color.White
-                                )
-                            ) { viewModel.togglePlayPause() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!isPlaying) {
-                            Icon(
-                                painter = painterResource(R.drawable.play),
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .padding(start = 5.dp)
-                            )
-                        } else {
-                            Icon(
-                                painter = painterResource(R.drawable.pause),
-                                contentDescription = "Pause",
-                                tint = Color.White,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-
-
-                    }
-
-                    Spacer(modifier = Modifier.width(30.dp))
-
-                    // Next Button
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .shadow(
-                                elevation = 0.dp,
-                                shape = CircleShape,
-                                ambientColor = dominantColor
-                            )
-                            .border(
-                                width = 2.dp,
-                                color = Color.White,
-                                shape = CircleShape
-                            )
-                            .clip(CircleShape)
-                            .clickable { viewModel.skipToNext() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.skip_song),
-                            contentDescription = "Next",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-
-
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        // Controls with dynamic color accents
-    }*/
 }
 
 fun formatTime(ms: Long): String {
@@ -708,8 +289,6 @@ fun LauncherHomeScreen(
                 }
             }
         }
-
-
 
 
         /*        Box(modifier = Modifier.align(alignment = Alignment.BottomStart)) {
@@ -970,9 +549,8 @@ fun LauncherHomeScreen(
                 }, onAddNew = {
                     showFuelLogs = false
                     showFuelDialog = true
-                }, viewModel)
+                }, viewModel, onDelete = {})
             }
-
         }
     }
 }
@@ -1038,35 +616,33 @@ private fun DraggableWidget(
     var widgetWidth by remember { mutableStateOf(item.width) }
     var widgetHeight by remember { mutableStateOf(item.height) }
 
-    Box(
-        modifier = Modifier
-            .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onLongPress = {
-                        Log.e("fdknfjdonfld", "DraggableWidget: worked press")
-                        onLongPressToRemove(item)
-                    })
-            }) {
-        AndroidView(
-            factory = {
-                val info = appWidgetManager.getAppWidgetInfo(item.appWidgetId)
-                widgetHost.createView(context, item.appWidgetId, info).apply {
-                    setAppWidget(item.appWidgetId, info)
-                    layoutParams = FrameLayout.LayoutParams(widgetWidth, widgetHeight)
-                }
-            }, modifier = Modifier
-                .size(widgetWidth.dp, widgetHeight.dp)
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        if (true) {
-                            change.consume()
-                            offsetX += dragAmount.x
-                            offsetY += dragAmount.y
-                            onPositionChanged(offsetX, offsetY)
-                        }
-                    }
+    Box(modifier = Modifier
+        .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onLongPress = {
+                    Log.e("fdknfjdonfld", "DraggableWidget: worked press")
+                    onLongPressToRemove(item)
                 })
+        }) {
+        AndroidView(factory = {
+            val info = appWidgetManager.getAppWidgetInfo(item.appWidgetId)
+            widgetHost.createView(context, item.appWidgetId, info).apply {
+                setAppWidget(item.appWidgetId, info)
+                layoutParams = FrameLayout.LayoutParams(widgetWidth, widgetHeight)
+            }
+        }, modifier = Modifier
+            .size(widgetWidth.dp, widgetHeight.dp)
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    if (true) {
+                        change.consume()
+                        offsetX += dragAmount.x
+                        offsetY += dragAmount.y
+                        onPositionChanged(offsetX, offsetY)
+                    }
+                }
+            })
         if (true) {
             Box(
                 modifier = Modifier
@@ -1130,22 +706,30 @@ private fun DraggableWidget(
 }
 
 @Composable
-fun FuelLogs(onClose: () -> Unit, onAddNew: () -> Unit, viewModel: DashboardViewModel) {
+fun FuelLogs(
+    onClose: () -> Unit,
+    onAddNew: () -> Unit,
+    viewModel: DashboardViewModel,
+    onDelete: (fuelLog: FuelLog) -> Unit,
+) {
     Box(
-        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+        modifier = Modifier
+            .fillMaxSize(1F)
+            .padding(horizontal = 120.dp),
+        contentAlignment = Alignment.Center
     ) {
         // Background dimming
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                .background(Color.Transparent)
                 .clickable { onClose() })
 
         // Main card
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.8f)
-                .fillMaxHeight(0.85f),
+                .fillMaxHeight(.75f),
             shape = RoundedCornerShape(24.dp),
             elevation = CardDefaults.cardElevation(
                 defaultElevation = 16.dp, pressedElevation = 8.dp
@@ -1175,7 +759,12 @@ fun FuelLogs(onClose: () -> Unit, onAddNew: () -> Unit, viewModel: DashboardView
                         )
                     }
                 } else {
-                    FuelLogsList(fuelLogs = fuelLogs, onClose = onClose, onAddNew = onAddNew)
+                    FuelLogsList(
+                        fuelLogs = fuelLogs,
+                        onClose = onClose,
+                        onAddNew = onAddNew,
+                        onDelete = onDelete
+                    )
                 }
             }
         }

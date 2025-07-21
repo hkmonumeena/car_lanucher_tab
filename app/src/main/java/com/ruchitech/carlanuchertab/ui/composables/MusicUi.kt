@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,8 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
@@ -70,7 +68,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun PlaybackSlider(
     nowPlaying: MusicoletNowPlaying,
-    onPositionChange: (Long) -> Unit
+    onPositionChange: (Long) -> Unit,
 ) {
     var sliderPosition by remember(nowPlaying.position) {
         mutableFloatStateOf(nowPlaying.position.toFloat())
@@ -79,7 +77,9 @@ fun PlaybackSlider(
     var isSliderDragging by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 0.dp)
+        modifier = Modifier
+            .fillMaxWidth(0.8F)
+            .padding(horizontal = 0.dp)
     ) {
         Slider(
             value = if (isSliderDragging) sliderPosition else nowPlaying.position.toFloat(),
@@ -107,7 +107,9 @@ fun PlaybackSlider(
                 )
             },
             valueRange = 0f..nowPlaying.duration.toFloat(),
-            modifier = Modifier.fillMaxWidth().height(24.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(24.dp),
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -139,7 +141,7 @@ fun formatDuration2(millis: Long): String {
 fun MusicUi(viewModel: DashboardViewModel) {
     val nowPlaying by viewModel.nowPlaying.collectAsState()
     val infiniteTransition = rememberInfiniteTransition(label = "ZoomTransition")
- val interactionSource =  remember { MutableInteractionSource() }
+    val interactionSource = remember { MutableInteractionSource() }
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = if (nowPlaying?.isPlaying == true) 1.05f else 1f,
@@ -149,7 +151,6 @@ fun MusicUi(viewModel: DashboardViewModel) {
         ),
         label = "ZoomScale"
     )
-
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -161,26 +162,27 @@ fun MusicUi(viewModel: DashboardViewModel) {
 
     Box(
         modifier = Modifier.fillMaxSize()
-           // .border(0.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp)),
-        ,contentAlignment = Alignment.TopCenter
+        // .border(0.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp)),
+        , contentAlignment = Alignment.TopCenter
 
     ) {
         // Dimmed background artwork
-       /* nowPlaying?.artwork?.let { artwork ->
-            Image(
-                bitmap = artwork.asImageBitmap(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp)) // This must come BEFORE blur
-                    .border(1.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp))
-                    .alpha(0.8f) // Adjust opacity here (0.2f = 20% opacity)
-                    .blur(radius = 12.dp) // Add blur effect
-            )
-        }*/
+        /* nowPlaying?.artwork?.let { artwork ->
+             Image(
+                 bitmap = artwork.asImageBitmap(),
+                 contentDescription = null,
+                 contentScale = ContentScale.Crop,
+                 modifier = Modifier.fillMaxSize()
+                     .clip(RoundedCornerShape(10.dp)) // This must come BEFORE blur
+                     .border(1.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp))
+                     .alpha(0.8f) // Adjust opacity here (0.2f = 20% opacity)
+                     .blur(radius = 12.dp) // Add blur effect
+             )
+         }*/
         nowPlaying?.let { music ->
             Column(
-                modifier = Modifier.fillMaxSize()/*.height(300.dp)*/.pointerInput(Unit) {
+                modifier = Modifier
+                    .fillMaxSize()/*.height(300.dp)*/.pointerInput(Unit) {
                         detectHorizontalDragGestures { change, dragAmount ->
                             if (dragAmount > 30) {
                                 viewModel.previous()
@@ -189,31 +191,46 @@ fun MusicUi(viewModel: DashboardViewModel) {
                             }
                             change.consume()
                         }
-                    }.padding(16.dp),
+                    }
+                    .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top
             ) {
                 Box(
-                    modifier = Modifier.size(300.dp).graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    }.clip(RoundedCornerShape(12.dp)).shadow(
-                        elevation = 12.dp,
-                        shape = RoundedCornerShape(12.dp),
-                        spotColor = White.copy(alpha = 0.80f)
-                    ).background(Color.Black).clickable(onClick = {
-                        viewModel.playPause()
-                    })
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(color = Color.Transparent)
+                        .weight(1.3F)
+                        .padding(horizontal = 100.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .clip(RoundedCornerShape(12.dp))
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            spotColor = White.copy(alpha = 0.80f)
+                        )
+                        .background(Color.Transparent)
+                        .clickable(onClick = {
+                            viewModel.playPause()
+                        })
                 ) {
                     music.artwork?.let {
                         Image(
                             bitmap = it.asImageBitmap(),
                             contentDescription = "Album Art",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.size(300.dp)
+                            contentScale = ContentScale.FillBounds,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(5.dp)
+                                .clip(RoundedCornerShape(16.dp))
                         )
                     } ?: Box(
-                        modifier = Modifier.size(300.dp).background(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
                                         White.copy(alpha = 0.85f), White.copy(alpha = 0.6f)
@@ -230,141 +247,149 @@ fun MusicUi(viewModel: DashboardViewModel) {
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = music.title ?: "Unknown Track",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        color = White, fontWeight = FontWeight.Bold, shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.5f),
-                            offset = Offset(1f, 1f),
-                            blurRadius = 4f
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1F)
+                        .background(color = Color.Transparent),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = music.title ?: "Unknown Track",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            color = White, fontWeight = FontWeight.Bold, shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.5f),
+                                offset = Offset(1f, 1f),
+                                blurRadius = 4f
+                            )
                         )
                     )
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                Text(
-                    text = music.artist ?: "Unknown Artist",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        color = White.copy(alpha = 0.8f), shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.3f),
-                            offset = Offset(1f, 1f),
-                            blurRadius = 2f
+                    Text(
+                        text = music.artist ?: "Unknown Artist",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            color = White.copy(alpha = 0.8f), shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.3f),
+                                offset = Offset(1f, 1f),
+                                blurRadius = 2f
+                            )
                         )
                     )
-                )
 
-                Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
 
-                Text(
-                    text = music.album ?: "Unknown Album",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        color = White.copy(alpha = 0.6f)
+                    Text(
+                        text = music.album ?: "Unknown Album",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            color = White.copy(alpha = 0.6f)
+                        )
                     )
-                )
-                PlaybackSlider(
-                  nowPlaying = music, onPositionChange = { newPosition ->
-                        viewModel.seekTo(newPosition)
-                    })
-                                Row(
+                    PlaybackSlider(
+                        nowPlaying = music, onPositionChange = { newPosition ->
+                            viewModel.seekTo(newPosition)
+                        })
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 15.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Previous Button
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 10.dp)
+                                .size(60.dp)
+                                .shadow(
+                                    elevation = 0.dp, shape = CircleShape, ambientColor = White
+                                )
+                                .border(
+                                    width = 2.dp, color = White, shape = CircleShape
+                                )
+                                .clip(CircleShape)
+                                .clickable { viewModel.previous() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.skip_song),
+                                contentDescription = "Previous",
+                                tint = White,
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .rotate(180F)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(38.dp))
+
+                        // Play/Pause Button
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 10.dp)
+                                .size(80.dp)
+                                .border(
+                                    width = 2.dp, color = White, shape = CircleShape
+                                )
+                                .clip(CircleShape)
+                                .background(White.copy(alpha = 0.2f))
+                                .clickable(
+                                    interactionSource = interactionSource, indication = ripple(
+                                        bounded = true, color = White
+                                    )
+                                ) { viewModel.playPause() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!music.isPlaying) {
+                                Icon(
+                                    painter = painterResource(R.drawable.play),
+                                    contentDescription = "Play",
+                                    tint = White,
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 15.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Previous Button
-                                    Box(
-                                        modifier = Modifier
-                                            .size(56.dp)
-                                            .shadow(
-                                                elevation = 0.dp, shape = CircleShape, ambientColor = White
-                                            )
-                                            .border(
-                                                width = 2.dp, color = White, shape = CircleShape
-                                            )
-                                            .clip(CircleShape)
-                                            .clickable { viewModel.previous() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.skip_song),
-                                            contentDescription = "Previous",
-                                            tint = White,
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .rotate(180F)
-                                        )
-                                    }
+                                        .size(36.dp)
+                                        .padding(start = 5.dp)
+                                )
+                            } else {
+                                Icon(
+                                    painter = painterResource(R.drawable.pause),
+                                    contentDescription = "Pause",
+                                    tint = White,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(38.dp))
+                        // Next Button
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 10.dp)
+                                .size(60.dp)
+                                .shadow(
+                                    elevation = 0.dp, shape = CircleShape, ambientColor = White
+                                )
+                                .border(
+                                    width = 2.dp, color = White, shape = CircleShape
+                                )
+                                .clip(CircleShape)
+                                .clickable { viewModel.next() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.skip_song),
+                                contentDescription = "Next",
+                                tint = White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                }
 
-                                    Spacer(modifier = Modifier.width(30.dp))
-
-                                    // Play/Pause Button
-                                    Box(
-                                        modifier = Modifier
-                                            .size(76.dp)
-                                            .border(
-                                                width = 2.dp, color = White, shape = CircleShape
-                                            )
-                                            .clip(CircleShape)
-                                            .background(White.copy(alpha = 0.2f))
-                                            .clickable(
-                                                interactionSource = interactionSource, indication = ripple(
-                                                    bounded = true, color = White
-                                                )
-                                            ) { viewModel.playPause() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (!music.isPlaying) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.play),
-                                                contentDescription = "Play",
-                                                tint = White,
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .padding(start = 5.dp)
-                                            )
-                                        } else {
-                                            Icon(
-                                                painter = painterResource(R.drawable.pause),
-                                                contentDescription = "Pause",
-                                                tint = White,
-                                                modifier = Modifier.size(36.dp)
-                                            )
-                                        }
-
-
-                                    }
-
-                                    Spacer(modifier = Modifier.width(30.dp))
-
-                                    // Next Button
-                                    Box(
-                                        modifier = Modifier
-                                            .size(56.dp)
-                                            .shadow(
-                                                elevation = 0.dp, shape = CircleShape, ambientColor = White
-                                            )
-                                            .border(
-                                                width = 2.dp, color = White, shape = CircleShape
-                                            )
-                                            .clip(CircleShape)
-                                            .clickable { viewModel.next() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.skip_song),
-                                            contentDescription = "Next",
-                                            tint = White,
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                    }
-                                }
             }
         }
     }

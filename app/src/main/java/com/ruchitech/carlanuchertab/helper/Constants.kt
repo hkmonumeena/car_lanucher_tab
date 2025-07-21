@@ -5,7 +5,7 @@ import com.ruchitech.carlanuchertab.R
 
 sealed class NavItem(
     val iconRes: Int,
-    val label: String
+    val label: String,
 ) {
     object Map : NavItem(R.drawable.map, "Map")
     object Radio : NavItem(R.drawable.radio, "Radio")
@@ -45,6 +45,7 @@ val wallpapers = listOf(
     R.drawable.launcher_bg7,
     R.drawable.launcher_bg8,
     R.drawable.launcher_bg9,
+    R.drawable.launcher_bg10,
 )
 
 

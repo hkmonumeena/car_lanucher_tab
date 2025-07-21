@@ -42,11 +42,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -87,6 +89,7 @@ import com.ruchitech.carlanuchertab.helper.MusicNotificationListener
 import com.ruchitech.carlanuchertab.helper.NavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.rememberVehicleLocationState
+import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
 import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
 import com.ruchitech.carlanuchertab.ui.composables.ModalWallpaper
@@ -254,6 +257,32 @@ fun ClickedViewsScreen(context: Context = LocalContext.current) {
     }
 }
 
+@Composable
+fun DeleteConfirmationDialog(
+    showDialog: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Confirm Delete") },
+            text = { Text("Are you sure you want to delete this entry?") },
+            confirmButton = {
+                TextButton(onClick = onConfirm) {
+                    Text("Delete", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+
 
 @Composable
 fun HomeScreen(
@@ -265,6 +294,8 @@ fun HomeScreen(
     val appWidgetManager = AppWidgetManager.getInstance(context)
     val appWidgetHost = remember { AppWidgetHost(context, viewModel.APPWIDGET_HOST_ID) }
     val locationState = rememberVehicleLocationState()
+    var deleteDialog by remember { mutableStateOf(false) }
+    var itemToDelete: FuelLog? by remember { mutableStateOf(null) }
     //val kmhSpeed = speed * 3.6f // Convert m/s to km/h
     //var currentSpeed by remember { mutableStateOf(locationState.speed * 3.6f) } // Default dummy value
     val configureLauncher = rememberLauncherForActivityResult(
@@ -357,12 +388,14 @@ fun HomeScreen(
                 )
         ) {
             // 🎨 Wallpaper background from resource
-          if (uiState.wallpaperId!=0)  Image(
-                painter = painterResource(id = uiState.wallpaperId),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+          if (uiState.wallpaperId!=0) {
+              Image(
+                  painter = painterResource(id = uiState.wallpaperId),
+                  contentDescription = null,
+                  modifier = Modifier.fillMaxSize(),
+                  contentScale = ContentScale.FillBounds
+              )
+          }
 
             if (uiState.addFuelLog) {
                 FuelLogDialog(
@@ -573,9 +606,25 @@ fun HomeScreen(
                         viewModel.hideFuelLogsModal()
                     }, onAddNew = {
                         viewModel.addFuelLog()
-                    }, viewModel)
+                    }, viewModel, onDelete = {
+                        itemToDelete = it
+                        deleteDialog = true
+                    })
                 }
 
+                DeleteConfirmationDialog(
+                    showDialog = deleteDialog,
+                    onConfirm = {
+                        deleteDialog = false
+                        itemToDelete?.let {
+                            viewModel.deleteFuelLog(it)
+                            itemToDelete = null
+                        }
+                    },
+                    onDismiss = {
+                        deleteDialog = false
+                    }
+                )
             }
 
             MultiWidgetCanvas(

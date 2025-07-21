@@ -60,6 +60,7 @@ fun WidgetsDropdownMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
+        containerColor = Color.Transparent,
         modifier = modifier
             .background(
                 color = Color(0xFF1E293B), // Dark blue-gray
@@ -67,7 +68,7 @@ fun WidgetsDropdownMenu(
             )
             .border(
                 width = 1.dp,
-                color = Color(0xFF3A5A78).copy(alpha = 0.5f), // Metallic border
+                color = Color(0xFF3A5A78).copy(alpha = 0.5f),
                 shape = RoundedCornerShape(12.dp)
             )
             .width(IntrinsicSize.Max)
