@@ -30,23 +30,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -78,11 +84,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.registerReceiver
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.idapgroup.snowfall.snowfall
 import com.ruchitech.carlanuchertab.ClickedViewPrefs
+import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.WidgetItem
 import com.ruchitech.carlanuchertab.clock.ShowAnalogClock
 import com.ruchitech.carlanuchertab.helper.MusicNotificationListener
@@ -113,8 +121,7 @@ fun AnalogSpeedometer(
     Box(
         modifier = modifier
             .width(300.dp)
-            .height(300.dp),
-        contentAlignment = Alignment.TopCenter
+            .height(300.dp), contentAlignment = Alignment.TopCenter
     ) {
         Canvas(
             modifier = Modifier
@@ -135,7 +142,6 @@ fun AnalogSpeedometer(
                 style = Stroke(width = 4f)
             )
 
-            // Draw tick marks
             for (i in 0..220 step 20) {
                 val angle = 150f + (i.toFloat() / 220f) * 240f
                 val tickLength = if (i % 40 == 0) 20f else 10f
@@ -149,10 +155,7 @@ fun AnalogSpeedometer(
                 )
 
                 drawLine(
-                    color = Color.White,
-                    start = start,
-                    end = end,
-                    strokeWidth = 2f
+                    color = Color.White, start = start, end = end, strokeWidth = 2f
                 )
 
                 // Add numbers for major ticks
@@ -166,8 +169,7 @@ fun AnalogSpeedometer(
                                 color = android.graphics.Color.WHITE
                                 textSize = 24f
                                 textAlign = android.graphics.Paint.Align.CENTER
-                            }
-                        )
+                            })
                     }
                 }
             }
@@ -176,20 +178,15 @@ fun AnalogSpeedometer(
             val needleAngle = 150f + (currentSpeed.toFloat() / 220f) * 240f
             val needleLength = radius * 0.8f
             drawLine(
-                color = Color.Red,
-                start = center,
-                end = Offset(
+                color = Color.Red, start = center, end = Offset(
                     center.x + needleLength * cos(needleAngle * (PI / 180f)).toFloat(),
                     center.y + needleLength * sin(needleAngle * (PI / 180f)).toFloat()
-                ),
-                strokeWidth = 4f
+                ), strokeWidth = 4f
             )
 
             // Draw center circle
             drawCircle(
-                color = Color.Red,
-                radius = 8f,
-                center = center
+                color = Color.Red, radius = 8f, center = center
             )
         }
 
@@ -238,8 +235,7 @@ fun ClickedViewsScreen(context: Context = LocalContext.current) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Button(onClick = {
                 clickedViews = ClickedViewPrefs.getClickedViews(context)
@@ -261,7 +257,7 @@ fun ClickedViewsScreen(context: Context = LocalContext.current) {
 fun DeleteConfirmationDialog(
     showDialog: Boolean,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     if (showDialog) {
         AlertDialog(
@@ -277,11 +273,9 @@ fun DeleteConfirmationDialog(
                 TextButton(onClick = onDismiss) {
                     Text("Cancel")
                 }
-            }
-        )
+            })
     }
 }
-
 
 
 @Composable
@@ -321,7 +315,6 @@ fun HomeScreen(
             val appWidgetId = data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1)
                 ?: AppWidgetManager.INVALID_APPWIDGET_ID
             viewModel.currentAppWidgetId = appWidgetId
-
             val info = appWidgetManager.getAppWidgetInfo(appWidgetId)
             if (info?.configure != null) {
                 val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
@@ -376,6 +369,63 @@ fun HomeScreen(
         }
     }
     NowPlayingObserver(viewModel)
+    if (uiState.showPairedDevices) {
+        Dialog(onDismissRequest = {
+            viewModel.hidePairedDevicesModal()
+        }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+            ) {
+                Column {
+                    // Header with title and close button
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Available Devices",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        IconButton(onClick = { viewModel.hidePairedDevicesModal() }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close"
+                            )
+                        }
+                    }
+
+                    Divider()
+
+                    // Devices list
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp)
+                    ) {
+                        items(viewModel.pairedDevices) { device ->
+                            Text(
+                                text = "${device.name} (${device.address})",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.connect(device)
+                                        viewModel.hidePairedDevicesModal()
+                                    }
+                                    .padding(16.dp)
+                            )
+                            Divider()
+                        }
+                    }
+                }
+            }
+        }
+    }
     Scaffold { padding ->
         Box(
             modifier = Modifier
@@ -388,14 +438,14 @@ fun HomeScreen(
                 )
         ) {
             // 🎨 Wallpaper background from resource
-          if (uiState.wallpaperId!=0) {
-              Image(
-                  painter = painterResource(id = uiState.wallpaperId),
-                  contentDescription = null,
-                  modifier = Modifier.fillMaxSize(),
-                  contentScale = ContentScale.FillBounds
-              )
-          }
+            if (uiState.wallpaperId != 0) {
+                Image(
+                    painter = painterResource(id = R.drawable.launcher_bg10),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds
+                )
+            }
 
             if (uiState.addFuelLog) {
                 FuelLogDialog(
@@ -457,7 +507,7 @@ fun HomeScreen(
 
                 Box(
                     modifier = Modifier
-                        .weight(1F)
+                        .weight(1.5F)
                         .fillMaxSize()
                 ) {
                     Box(
@@ -486,8 +536,7 @@ fun HomeScreen(
                                         val intent =
                                             Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
                                                 putExtra(
-                                                    AppWidgetManager.EXTRA_APPWIDGET_ID,
-                                                    appWidgetId
+                                                    AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId
                                                 )
                                             }
                                         pickWidgetLauncher.launch(intent)
@@ -515,9 +564,7 @@ fun HomeScreen(
                                         context.startActivity(launchIntent)
                                     } else {
                                         Toast.makeText(
-                                            context,
-                                            "App not installed",
-                                            Toast.LENGTH_SHORT
+                                            context, "App not installed", Toast.LENGTH_SHORT
                                         ).show()
                                     }
                                 }
@@ -539,6 +586,14 @@ fun HomeScreen(
                                 NavItem.Settings -> {
                                     viewModel.toggleSettings()
                                 }
+
+                                NavItem.Client -> {
+                                    onNavigated(bottomNavItem)
+                                }
+
+                                NavItem.Server -> {
+                                    onNavigated(bottomNavItem)
+                                }
                             }
                         })
 
@@ -548,13 +603,23 @@ fun HomeScreen(
                             .align(alignment = Alignment.TopCenter)
                             .wrapContentSize()
                     )
-                    Text(
+
+
+                    if (uiState.serverStarted) {
+                        Image(
+                            modifier = Modifier.padding(10.dp).size(25.dp),
+                            painter = painterResource(R.drawable.connected),
+                            contentDescription = null
+                        )
+                    }
+
+               /*     Text(
                         text = "${(locationState.speed * 3.6f).toInt()} km/h",
                         color = Color.White,
                         fontSize = 32.sp,
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.padding(top = 10.dp)
-                    )
+                    )*/
                 }
 
                 Box(
@@ -563,8 +628,7 @@ fun HomeScreen(
                         .fillMaxSize()
                 ) {
                     MusicUi(viewModel)
-                }
-                /*                Box(
+                }/*                Box(
                                     modifier = Modifier.fillMaxSize(),
                                 ) {
 
@@ -588,8 +652,7 @@ fun HomeScreen(
                                     ) {
 
                                     }
-                                }*/
-                /*Box(modifier = Modifier
+                                }*//*Box(modifier = Modifier
                     .fillMaxWidth()
                     .border(1.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp))
                     .weight(1F)) {
@@ -612,19 +675,15 @@ fun HomeScreen(
                     })
                 }
 
-                DeleteConfirmationDialog(
-                    showDialog = deleteDialog,
-                    onConfirm = {
-                        deleteDialog = false
-                        itemToDelete?.let {
-                            viewModel.deleteFuelLog(it)
-                            itemToDelete = null
-                        }
-                    },
-                    onDismiss = {
-                        deleteDialog = false
+                DeleteConfirmationDialog(showDialog = deleteDialog, onConfirm = {
+                    deleteDialog = false
+                    itemToDelete?.let {
+                        viewModel.deleteFuelLog(it)
+                        itemToDelete = null
                     }
-                )
+                }, onDismiss = {
+                    deleteDialog = false
+                })
             }
 
             MultiWidgetCanvas(
