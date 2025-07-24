@@ -1,17 +1,23 @@
 package com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard
 
+import android.Manifest
 import android.appwidget.AppWidgetManager
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothServerSocket
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ruchitech.carlanuchertab.ClickedViewBus
 import com.ruchitech.carlanuchertab.WidgetItem
 import com.ruchitech.carlanuchertab.helper.VoiceCommandHelper
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
@@ -20,6 +26,7 @@ import com.ruchitech.carlanuchertab.helper.isAccessibilityEnabled
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
+import com.ruchitech.carlanuchertab.ui.btservices.BluetoothConnectionManager
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.state.DashboardUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +34,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.util.UUID
 import javax.inject.Inject
 
 data class MusicoletNowPlaying(
@@ -43,12 +52,20 @@ data class MusicoletNowPlaying(
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     val dashboardDao: DashboardDao,
+    private val bluetoothManager: BluetoothConnectionManager,
 ) : ViewModel() {
     val widgetItems = mutableStateListOf<WidgetItem>()
     val APPWIDGET_HOST_ID = 1024
     var currentAppWidgetId = -1
     lateinit var voiceHelper: VoiceCommandHelper
+    val connectionState = bluetoothManager.connectionState
+    val incomingMessages = bluetoothManager.incomingMessages
+    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
 
+    private val _pairedDevices = mutableStateListOf<BluetoothDevice>()
+    val pairedDevices: List<BluetoothDevice> = _pairedDevices
+
+    private val uuid = UUID.fromString("8ce255c0-200a-11e0-ac64-0800200c9a66")
     private val _nowPlaying = MutableStateFlow<MusicoletNowPlaying?>(null)
     val nowPlaying: StateFlow<MusicoletNowPlaying?> = _nowPlaying
 
@@ -61,8 +78,93 @@ class DashboardViewModel @Inject constructor(
     private val _uiState = mutableStateOf(DashboardUiState())
     val uiState: State<DashboardUiState> = _uiState
 
+    private var serverSocket: BluetoothServerSocket? = null
+
+    fun startReceiverServer() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+
+                serverSocket = bluetoothAdapter?.listenUsingRfcommWithServiceRecord(
+                    "MyBTServer", uuid
+                )
+                val socket = serverSocket?.accept()
+
+                socket?.let {
+                    val input = it.inputStream
+                    val output = it.outputStream
+                    val buffer = ByteArray(1024)
+                    while (true) {
+                        val bytes = input.read(buffer)
+                        val received = String(buffer, 0, bytes)
+                        Log.d("fghufiughfignf", "Received: $received")
+                        handleInput(received)
+                        val response = "Echo: $received"
+                        output.write(response.toByteArray())
+                    }
+                }
+            } catch (e: IOException) {
+                Log.e("BluetoothServer", "Error: ${e.message}")
+            }
+        }
+    }
+
     init {
         initData()
+        viewModelScope.launch {
+            loadPairedDevices()
+            incomingMessages.collect { msg ->
+                handleMessage(msg)
+            }
+        }
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun loadPairedDevices() {
+        _pairedDevices.clear()
+        val devices = bluetoothAdapter?.bondedDevices
+        devices?.forEach {
+            _pairedDevices.add(it)
+        }
+    }
+
+
+    fun connect(device: BluetoothDevice) {
+        viewModelScope.launch {
+            bluetoothManager.connect(device, uuid)
+            _uiState.value = _uiState.value.copy(btConnected = true)
+            sendCommand("connected")
+        }
+    }
+
+    fun sendCommand(cmd: String) {
+        bluetoothManager.send(cmd)
+    }
+
+    fun handleInput(command: String){
+        when(command){
+            "play/pause" -> playPause()
+            "openFuelLog" ->{
+                showFuelLogsModal()
+            }
+            "connected" ->{
+                val current = _uiState.value
+                _uiState.value = current.copy(serverStarted = true)
+            }
+        }
+    }
+
+    private fun handleMessage(msg: String) {
+        // process msg, update state
+        Log.d("fghofudhgfiudghufgi", "Received: $msg")
+    }
+
+    fun disconnect() {
+        serverSocket?.close()
+        _uiState.value = _uiState.value.copy(btConnected = false)
+        bluetoothManager.disconnect()
+        _uiState.value = _uiState.value.copy(
+            serverStarted = false
+        )
     }
 
     fun updateMusicoletController(controllers: MediaController?) {
@@ -223,17 +325,13 @@ class DashboardViewModel @Inject constructor(
             }
 
             val widgetItem = WidgetItem(
-                appWidgetId = appWidgetId,
-                x = 0f,
-                y = 0f,
-                width = 400,
-                height = 400
+                appWidgetId = appWidgetId, x = 0f, y = 0f, width = 400, height = 400
             )
 
             // 🧠 Step 1: Update DB
             if (dashboardData != null) {
-                val updatedWidgets = dashboardData.widgets
-                    .filterNot { it.appWidgetId == appWidgetId } + widgetItem
+                val updatedWidgets =
+                    dashboardData.widgets.filterNot { it.appWidgetId == appWidgetId } + widgetItem
                 val updatedDashboard = dashboardData.copy(widgets = updatedWidgets)
                 dashboardDao.updateDashboard(updatedDashboard)
             } else {
@@ -243,10 +341,8 @@ class DashboardViewModel @Inject constructor(
             // 🧠 Step 2: Update Compose state
             withContext(Dispatchers.Main) {
                 val current = _uiState.value
-                _uiState.value = current.copy(
-                    widgetItems = current.widgetItems
-                        .filterNot { it.appWidgetId == appWidgetId } + widgetItem
-                )
+                _uiState.value =
+                    current.copy(widgetItems = current.widgetItems.filterNot { it.appWidgetId == appWidgetId } + widgetItem)
                 Log.d("showWidget", "✅ Widget shown and stored: $widgetItem")
             }
         }
@@ -256,15 +352,13 @@ class DashboardViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             widgetItems = _uiState.value.widgetItems.map {
                 if (it.appWidgetId == updatedItem.appWidgetId) updatedItem else it
-            }
-        )
+            })
         saveWidgetItems(_uiState.value.widgetItems)
     }
 
     fun deleteWidget(appWidgetId: Int) {
         _uiState.value = _uiState.value.copy(
-            widgetItems = _uiState.value.widgetItems.filterNot { it.appWidgetId == appWidgetId }
-        )
+            widgetItems = _uiState.value.widgetItems.filterNot { it.appWidgetId == appWidgetId })
         saveWidgetItems(_uiState.value.widgetItems)
     }
 
@@ -289,7 +383,8 @@ class DashboardViewModel @Inject constructor(
             } else {
                 dashboardDao.insertOrUpdateDashboard(
                     Dashboard(
-                        widgets = items, wallpaperId = current.wallpaperId,
+                        widgets = items,
+                        wallpaperId = current.wallpaperId,
                         isSnowfall = current.isSnowfall
                     )
                 )
@@ -341,6 +436,12 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+
+    fun hidePairedDevicesModal() {
+        val current = _uiState.value
+        _uiState.value = current.copy(showPairedDevices = false)
+    }
+
     fun handleMenuAction(action: WidgetMenuAction, context: Context) {
         when (action) {
             WidgetMenuAction.AddWidget -> TODO()
@@ -361,7 +462,31 @@ class DashboardViewModel @Inject constructor(
                     showWallpaper = !_uiState.value.showWallpaper
                 )
             }
+
+            WidgetMenuAction.PairedDevices -> {
+                viewModelScope.launch {
+                    loadPairedDevices()
+                    _uiState.value = _uiState.value.copy(
+                        showPairedDevices = !_uiState.value.showPairedDevices
+                    )
+                }
+            }
+
+            WidgetMenuAction.StartStopServer -> {
+                Log.e("gfdljgfhngilg", "handleMenuAction: $action")
+                val current = _uiState.value
+                if (current.serverStarted) {
+                    disconnect()
+                } else {
+                    startReceiverServer()
+                }
+            }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        serverSocket?.close()
     }
 
 }

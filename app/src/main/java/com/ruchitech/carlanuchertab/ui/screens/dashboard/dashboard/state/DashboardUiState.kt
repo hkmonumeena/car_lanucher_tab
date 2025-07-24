@@ -11,5 +11,8 @@ data class DashboardUiState(
     val showSettings: Boolean = false,
     val showWallpaper: Boolean = false,
     val showFuelLogs: Boolean = false,
-    val addFuelLog: Boolean = false
+    val addFuelLog: Boolean = false,
+    val showPairedDevices: Boolean = false,
+    val serverStarted: Boolean = false,
+    val btConnected: Boolean = false,
 )

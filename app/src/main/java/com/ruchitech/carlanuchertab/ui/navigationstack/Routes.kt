@@ -6,8 +6,16 @@ import kotlinx.serialization.Serializable
 sealed class Screen {
     @Serializable
     data object Home : Screen()
+
     @Serializable
     data object Apps : Screen()
+
     @Serializable
     data object Settings : Screen()
+
+    @Serializable
+    data object BluetoothClientScreen : Screen()
+
+    @Serializable
+    data object BluetoothServerScreen : Screen()
 }

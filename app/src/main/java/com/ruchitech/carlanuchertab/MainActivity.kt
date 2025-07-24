@@ -71,6 +71,11 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        "openAccessibilitySettings" -> {
+                            Log.e("gfjgbifbgkfjgfg", "onCreate: $viewId")
+                          //  openNotificationAccessSettings(this@MainActivity)
+                        }
+
                     }
                 }
             }

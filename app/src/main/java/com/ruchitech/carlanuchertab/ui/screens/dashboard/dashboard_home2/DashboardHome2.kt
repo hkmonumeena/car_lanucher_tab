@@ -4,6 +4,4 @@ import androidx.compose.runtime.Composable
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.DashboardViewModel
 
 @Composable
-fun  DashboardHome(viewModel: DashboardViewModel) {
-
-}
+fun  DashboardHome(viewModel: DashboardViewModel) {}

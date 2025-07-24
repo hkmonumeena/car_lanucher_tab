@@ -369,6 +369,9 @@ fun LauncherHomeScreen(
                         WidgetMenuAction.Fuels -> {
 
                         }
+
+                        WidgetMenuAction.PairedDevices -> TODO()
+                        WidgetMenuAction.StartStopServer -> TODO()
                     }
                 })
 
@@ -534,6 +537,8 @@ fun LauncherHomeScreen(
                     }
 
                     NavItem.Settings -> TODO()
+                    NavItem.Client -> TODO()
+                    NavItem.Server -> TODO()
                 }
 
             })

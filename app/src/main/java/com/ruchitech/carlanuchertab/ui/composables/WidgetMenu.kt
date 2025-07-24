@@ -54,6 +54,16 @@ fun WidgetsDropdownMenu(
             text = "Snowfall",
             icon = Icons.Default.Edit,
             action = WidgetMenuAction.Snowfall
+        ) ,
+        MenuItem(
+            text = "Paired Devices",
+            icon = Icons.Default.Edit,
+            action = WidgetMenuAction.PairedDevices
+        ),
+        MenuItem(
+            text = "Start/Stop Server",
+            icon = Icons.Default.Edit,
+            action = WidgetMenuAction.StartStopServer
         )
     )
 

@@ -62,3 +62,4 @@ object DatabaseModule {
         return db.dashboardDao()
     }
 }
+

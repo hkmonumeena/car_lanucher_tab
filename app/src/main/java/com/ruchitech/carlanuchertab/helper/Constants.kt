@@ -13,9 +13,11 @@ sealed class NavItem(
     object Fuel : NavItem(R.drawable.fuel_add, "Fuel")
     object Settings : NavItem(R.drawable.my_settings, "Settings")
     object AllApps : NavItem(R.drawable.apps, "All Apps")
+    object Client : NavItem(R.drawable.apps, "Client")
+    object Server : NavItem(R.drawable.apps, "Server")
 
     companion object {
-        val allItems = listOf(Radio, Music, Fuel, Settings)
+        val allItems = listOf(Radio, Music, Fuel, Settings, Client, Server)
     }
 }
 
@@ -26,6 +28,8 @@ sealed class WidgetMenuAction {
     object Wallpapers : WidgetMenuAction()
     object Fuel : WidgetMenuAction()
     object Snowfall : WidgetMenuAction()
+    object PairedDevices : WidgetMenuAction()
+    object StartStopServer : WidgetMenuAction()
     object Fuels : WidgetMenuAction()
 
     companion object {

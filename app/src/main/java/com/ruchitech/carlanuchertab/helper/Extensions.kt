@@ -1,44 +1,40 @@
 package com.ruchitech.carlanuchertab.helper
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
-import android.media.session.PlaybackState
 import android.provider.Settings
-import android.util.Log
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.jvm.java
 
 fun getActiveMediaMetadata(context: Context): MediaMetadata? {
     val mediaSessionManager =
         context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-/*
-    val listenerComponent = ComponentName(context, YourNotificationListenerService::class.java)
-    val controllers = mediaSessionManager.getActiveSessions(listenerComponent)
 
-
-    for (controller in controllers) {
-        val playbackState = controller.playbackState
-        val metadata = controller.metadata
-        if (playbackState != null &&
-            playbackState.state == PlaybackState.STATE_PLAYING &&
-            metadata != null
-        ) {
-            Log.d("MediaMetadata", "Now playing: ${metadata.description.title}")
-            return metadata
+    /*
+        val listenerComponent = ComponentName(context, YourNotificationListenerService::class.java)
+        val controllers = mediaSessionManager.getActiveSessions(listenerComponent)
+        for (controller in controllers) {
+            val playbackState = controller.playbackState
+            val metadata = controller.metadata
+            if (playbackState != null &&
+                playbackState.state == PlaybackState.STATE_PLAYING &&
+                metadata != null
+            ) {
+                Log.d("MediaMetadata", "Now playing: ${metadata.description.title}")
+                return metadata
+            }
         }
-    }
-    Log.e("glfjgifogkfgf", "getActiveMediaMetadata: ${controllers.size}", )*/
+        Log.e("glfjgifogkfgf", "getActiveMediaMetadata: ${controllers.size}", )*/
+
     return null
 }
 
 fun getCurrentDateFormatted(): String {
-    val dateFormat = SimpleDateFormat("EEEE\ndd MMM", Locale.getDefault())
+    val dateFormat = SimpleDateFormat("EEEE, dd MMM", Locale.getDefault())
     return dateFormat.format(Date())
 }
 
@@ -47,7 +43,7 @@ fun createFuelLogEntry(
     rupeeInput: Int?,
     fuelPriceInput: Float?,
     litersInput: Float?,
-    location: String? = null
+    location: String? = null,
 ): FuelLog? {
     var rupee = rupeeInput
     var liters = litersInput
@@ -74,7 +70,7 @@ fun createFuelLogEntry(
     }
 
     return FuelLog(
-        rupee = rupee?:0,
+        rupee = rupee ?: 0,
         liters = liters,
         fuelPrice = price,
         location = location
