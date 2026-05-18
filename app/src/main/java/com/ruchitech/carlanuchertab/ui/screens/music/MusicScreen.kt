@@ -18,14 +18,30 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -44,13 +60,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.music.AlbumSummary
 import com.ruchitech.carlanuchertab.music.GenreSummary
 import com.ruchitech.carlanuchertab.music.MusicSettingsEntity
@@ -58,14 +71,31 @@ import com.ruchitech.carlanuchertab.music.MusicTrackEntity
 import com.ruchitech.carlanuchertab.music.MusicViewModel
 import com.ruchitech.carlanuchertab.music.PlaylistTrackWithSong
 import com.ruchitech.carlanuchertab.music.PlaylistWithCount
+import com.ruchitech.carlanuchertab.ui.composables.MusicAddToPlaylistDialog
+import com.ruchitech.carlanuchertab.ui.composables.MusicAlbumArtwork
+import com.ruchitech.carlanuchertab.ui.composables.MusicConfirmDialog
 import com.ruchitech.carlanuchertab.ui.composables.MusicPlayerPanel
-import java.io.File
+import com.ruchitech.carlanuchertab.ui.composables.MusicPlayerStyle
+import com.ruchitech.carlanuchertab.ui.composables.MusicTextInputDialog
+import com.ruchitech.carlanuchertab.ui.composables.formatDuration
+private object MusicScreenColors {
+    val BackgroundTop = Color(0xFF050A10)
+    val BackgroundBottom = Color(0xFF121E2C)
+    val PanelFill = Color(0xFF141C26)
+    val RowFill = Color(0xFF1A2430)
+    val Border = Color(0x22FFFFFF)
+    val Accent = Color(0xFF5CE1E6)
+    val TextPrimary = Color(0xFFF4F7FA)
+    val TextSecondary = Color(0xB3F4F7FA)
+    val TextMuted = Color(0x80F4F7FA)
+}
 
 private enum class MusicTab {
     Playlists,
     Albums,
     Songs,
     Genres,
+    Liked,
 }
 
 @Composable
@@ -78,7 +108,11 @@ fun MusicScreen(
     val albums by viewModel.albums.collectAsState()
     val genres by viewModel.genres.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
+    val likedTracks by viewModel.likedTracks.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
+    val likedTrackUris = remember(likedTracks) { likedTracks.map { it.uri }.toSet() }
+    val currentTrack = playerState.currentTrack
+    val isCurrentTrackLiked = currentTrack != null && currentTrack.uri in likedTrackUris
 
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedTab by rememberSaveable { mutableStateOf(MusicTab.Songs) }
@@ -114,12 +148,15 @@ fun MusicScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.linearGradient(
-                        colors = listOf(Color(0xFF061018), Color(0xFF102033), Color(0xFF162A3B))
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MusicScreenColors.BackgroundTop,
+                            MusicScreenColors.BackgroundBottom
+                        )
                     )
                 )
                 .padding(padding)
-                .padding(16.dp)
+                .padding(14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize(),
@@ -129,9 +166,10 @@ fun MusicScreen(
                     modifier = Modifier
                         .weight(1.15f)
                         .fillMaxHeight()
-                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(28.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp))
-                        .padding(18.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MusicScreenColors.PanelFill)
+                        .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(24.dp))
+                        .padding(16.dp)
                 ) {
                     MusicHeader(
                         settings = settings,
@@ -153,9 +191,19 @@ fun MusicScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        label = { Text("Search") },
+                        label = { Text("Search library", color = MusicScreenColors.TextMuted) },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = MusicScreenColors.TextPrimary,
+                            unfocusedTextColor = MusicScreenColors.TextPrimary,
+                            focusedBorderColor = MusicScreenColors.Accent,
+                            unfocusedBorderColor = MusicScreenColors.Border,
+                            cursorColor = MusicScreenColors.Accent,
+                            focusedLabelColor = MusicScreenColors.Accent,
+                            unfocusedLabelColor = MusicScreenColors.TextMuted
+                        )
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -207,7 +255,9 @@ fun MusicScreen(
                                     ).value.firstOrNull() ?: return@AlbumDetailView
                                     viewModel.playAlbum(selectedAlbum!!.album, selectedAlbum!!.artist, first.uri)
                                 },
+                                likedTrackUris = likedTrackUris,
                                 onAddToPlaylist = { addToPlaylistTrack = it },
+                                onToggleLike = { viewModel.toggleLike(it.uri) },
                                 onDelete = { trackPendingDelete = it }
                             )
                         }
@@ -225,7 +275,9 @@ fun MusicScreen(
                                         ?: return@GenreDetailView
                                     viewModel.playGenre(selectedGenre!!.genre, first.uri)
                                 },
+                                likedTrackUris = likedTrackUris,
                                 onAddToPlaylist = { addToPlaylistTrack = it },
+                                onToggleLike = { viewModel.toggleLike(it.uri) },
                                 onDelete = { trackPendingDelete = it }
                             )
                         }
@@ -256,8 +308,10 @@ fun MusicScreen(
                         selectedTab == MusicTab.Songs -> {
                             SongListView(
                                 tracks = tracks.filterTrackSearch(searchQuery),
+                                likedTrackUris = likedTrackUris,
                                 onPlay = { viewModel.playAllSongs(it.uri) },
                                 onAddToPlaylist = { addToPlaylistTrack = it },
+                                onToggleLike = { viewModel.toggleLike(it.uri) },
                                 onDelete = { trackPendingDelete = it }
                             )
                         }
@@ -273,6 +327,17 @@ fun MusicScreen(
                             GenreListView(
                                 genres = genres.filterGenreSearch(searchQuery),
                                 onOpen = { selectedGenre = it }
+                            )
+                        }
+
+                        selectedTab == MusicTab.Liked -> {
+                            LikedSongsView(
+                                tracks = likedTracks.filterTrackSearch(searchQuery),
+                                likedTrackUris = likedTrackUris,
+                                onPlay = { viewModel.playLikedSongs(it.uri) },
+                                onAddToPlaylist = { addToPlaylistTrack = it },
+                                onToggleLike = { viewModel.toggleLike(it.uri) },
+                                onDelete = { trackPendingDelete = it }
                             )
                         }
 
@@ -293,9 +358,11 @@ fun MusicScreen(
 
                 MusicPlayerPanel(
                     modifier = Modifier.weight(0.95f),
+                    style = MusicPlayerStyle.Expanded,
                     settings = settings,
                     playerState = playerState,
                     allowDelete = playerState.currentTrack != null,
+                    isCurrentTrackLiked = isCurrentTrackLiked,
                     onTogglePlayback = viewModel::togglePlayback,
                     onSeekTo = viewModel::seekTo,
                     onSkipNext = viewModel::skipNext,
@@ -303,16 +370,21 @@ fun MusicScreen(
                     onDelete = {
                         playerState.currentTrack?.let { trackPendingDelete = it }
                     },
-                    onOpenLibrary = {}
+                    onOpenLibrary = {},
+                    onToggleLike = viewModel::toggleLikeCurrentTrack,
+                    onAddToPlaylist = {
+                        playerState.currentTrack?.let { addToPlaylistTrack = it }
+                    }
                 )
             }
         }
     }
 
     if (showCreatePlaylistDialog) {
-        TextInputDialog(
-            title = "Create Playlist",
+        MusicTextInputDialog(
+            title = "New playlist",
             initialValue = playlistNameInput,
+            fieldLabel = "Name",
             confirmLabel = "Create",
             onDismiss = { showCreatePlaylistDialog = false },
             onConfirm = { name ->
@@ -324,9 +396,11 @@ fun MusicScreen(
     }
 
     playlistToRename?.let { playlist ->
-        TextInputDialog(
-            title = "Rename Playlist",
+        MusicTextInputDialog(
+            title = "Rename",
+            subtitle = playlist.name,
             initialValue = playlistNameInput,
+            fieldLabel = "Name",
             confirmLabel = "Save",
             onDismiss = {
                 playlistToRename = null
@@ -341,69 +415,31 @@ fun MusicScreen(
     }
 
     trackPendingDelete?.let { track ->
-        AlertDialog(
-            onDismissRequest = { trackPendingDelete = null },
-            title = { Text("Delete song") },
-            text = {
-                Text("Delete \"${track.title}\" from storage permanently?")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteTrack(track.uri)
-                    trackPendingDelete = null
-                }) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { trackPendingDelete = null }) {
-                    Text("Cancel")
-                }
+        MusicConfirmDialog(
+            title = "Delete song",
+            message = "Delete \"${track.title}\" from storage permanently?",
+            confirmLabel = "Delete",
+            destructive = true,
+            onDismiss = { trackPendingDelete = null },
+            onConfirm = {
+                viewModel.deleteTrack(track.uri)
+                trackPendingDelete = null
             }
         )
     }
 
     addToPlaylistTrack?.let { track ->
-        AlertDialog(
-            onDismissRequest = { addToPlaylistTrack = null },
-            title = { Text("Add to playlist") },
-            text = {
-                if (playlists.isEmpty()) {
-                    Text("Create a playlist first.")
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        playlists.forEach { playlist ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .background(Color.White.copy(alpha = 0.06f))
-                                    .clickable {
-                                        viewModel.addTrackToPlaylist(playlist.id, track.uri)
-                                        addToPlaylistTrack = null
-                                    }
-                                    .padding(14.dp)
-                            ) {
-                                Text(playlist.name, color = Color.White)
-                            }
-                        }
-                    }
-                }
+        MusicAddToPlaylistDialog(
+            trackTitle = track.title,
+            playlists = playlists,
+            onDismiss = { addToPlaylistTrack = null },
+            onSelectPlaylist = { playlist ->
+                viewModel.addTrackToPlaylist(playlist.id, track.uri)
+                addToPlaylistTrack = null
             },
-            confirmButton = {
-                if (playlists.isEmpty()) {
-                    TextButton(onClick = {
-                        addToPlaylistTrack = null
-                        showCreatePlaylistDialog = true
-                    }) {
-                        Text("Create Playlist")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { addToPlaylistTrack = null }) {
-                    Text("Close")
-                }
+            onCreatePlaylist = {
+                addToPlaylistTrack = null
+                showCreatePlaylistDialog = true
             }
         )
     }
@@ -421,23 +457,48 @@ private fun MusicHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
-            Text(
-                text = "Native Music",
-                color = Color.White,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = settings.folderName ?: "No folder selected",
-                color = Color.White.copy(alpha = 0.70f),
-                style = MaterialTheme.typography.bodyMedium
-            )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MusicScreenColors.TextPrimary
+                )
+            }
+            Column {
+                Text(
+                    text = "Music Library",
+                    color = MusicScreenColors.TextPrimary,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = settings.folderName ?: "No folder selected",
+                    color = MusicScreenColors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onBack) { Text("Back") }
-            Button(onClick = onChooseFolder) { Text("Folder") }
-            Button(onClick = onRescan) { Text("Rescan") }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            IconButton(onClick = onChooseFolder) {
+                Icon(
+                    imageVector = Icons.Default.FolderOpen,
+                    contentDescription = "Choose folder",
+                    tint = MusicScreenColors.Accent
+                )
+            }
+            IconButton(onClick = onRescan) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Rescan",
+                    tint = MusicScreenColors.TextSecondary
+                )
+            }
         }
     }
 }
@@ -448,25 +509,33 @@ private fun MusicTabs(
     onTabSelected: (MusicTab) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         MusicTab.entries.forEach { tab ->
             val selected = tab == selectedTab
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .background(
-                        if (selected) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.05f)
+                        if (selected) MusicScreenColors.Accent.copy(alpha = 0.18f)
+                        else Color.White.copy(alpha = 0.05f)
                     )
-                    .border(1.dp, Color.White.copy(alpha = if (selected) 0.18f else 0.08f), RoundedCornerShape(18.dp))
+                    .border(
+                        1.dp,
+                        if (selected) MusicScreenColors.Accent.copy(alpha = 0.5f) else MusicScreenColors.Border,
+                        RoundedCornerShape(20.dp)
+                    )
                     .clickable { onTabSelected(tab) }
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(horizontal = 18.dp, vertical = 9.dp)
             ) {
                 Text(
                     text = tab.name,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge
+                    color = if (selected) MusicScreenColors.Accent else MusicScreenColors.TextSecondary,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
         }
@@ -485,31 +554,89 @@ private fun MusicEmptyBrowser(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(title, color = Color.White, style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            title,
+            color = MusicScreenColors.TextPrimary,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             subtitle,
-            color = Color.White.copy(alpha = 0.72f),
-            style = MaterialTheme.typography.bodyLarge
+            color = MusicScreenColors.TextSecondary,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(18.dp))
-        Button(onClick = onAction) { Text(actionLabel) }
+        Spacer(modifier = Modifier.height(16.dp))
+        TextButton(onClick = onAction) {
+            Text(actionLabel, color = MusicScreenColors.Accent, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
 @Composable
 private fun SongListView(
     tracks: List<MusicTrackEntity>,
+    likedTrackUris: Set<String>,
     onPlay: (MusicTrackEntity) -> Unit,
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
+    onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
 ) {
     TrackList(
         tracks = tracks,
+        likedTrackUris = likedTrackUris,
         onPlay = onPlay,
         onAddToPlaylist = onAddToPlaylist,
+        onToggleLike = onToggleLike,
         onDelete = onDelete
     )
+}
+
+@Composable
+private fun LikedSongsView(
+    tracks: List<MusicTrackEntity>,
+    likedTrackUris: Set<String>,
+    onPlay: (MusicTrackEntity) -> Unit,
+    onAddToPlaylist: (MusicTrackEntity) -> Unit,
+    onToggleLike: (MusicTrackEntity) -> Unit,
+    onDelete: (MusicTrackEntity) -> Unit,
+) {
+    if (tracks.isEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.FavoriteBorder,
+                contentDescription = null,
+                tint = MusicScreenColors.Accent,
+                modifier = Modifier.size(36.dp)
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                "No liked songs yet",
+                color = MusicScreenColors.TextPrimary,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "Tap the heart on a playing track to save it here.",
+                color = MusicScreenColors.TextMuted,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    } else {
+        TrackList(
+            tracks = tracks,
+            likedTrackUris = likedTrackUris,
+            onPlay = onPlay,
+            onAddToPlaylist = onAddToPlaylist,
+            onToggleLike = onToggleLike,
+            onDelete = onDelete
+        )
+    }
 }
 
 @Composable
@@ -563,36 +690,50 @@ private fun PlaylistListView(
     onDelete: (PlaylistWithCount) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Button(onClick = onCreate) {
-            Text("Create Playlist")
+        TextButton(onClick = onCreate) {
+            Icon(Icons.Default.Add, contentDescription = null, tint = MusicScreenColors.Accent)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("New playlist", color = MusicScreenColors.Accent, fontWeight = FontWeight.SemiBold)
         }
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(playlists) { playlist ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-                        .padding(16.dp)
-                ) {
-                    Column {
-                        Text(playlist.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "${playlist.songCount} songs",
-                            color = Color.White.copy(alpha = 0.68f),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { onOpen(playlist) }) { Text("Open") }
-                            Button(onClick = { onRename(playlist) }) { Text("Rename") }
-                            Button(onClick = { onDelete(playlist) }) { Text("Delete") }
+                LibraryListCard(onClick = { onOpen(playlist) }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                playlist.name,
+                                color = MusicScreenColors.TextPrimary,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "${playlist.songCount} songs",
+                                color = MusicScreenColors.TextMuted,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        IconButton(onClick = { onRename(playlist) }) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Rename",
+                                tint = MusicScreenColors.TextSecondary
+                            )
+                        }
+                        IconButton(onClick = { onDelete(playlist) }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = Color(0xFFFF8A80)
+                            )
                         }
                     }
                 }
@@ -605,10 +746,12 @@ private fun PlaylistListView(
 private fun AlbumDetailView(
     summary: AlbumSummary,
     tracks: List<MusicTrackEntity>,
+    likedTrackUris: Set<String>,
     onBack: () -> Unit,
     onPlayTrack: (MusicTrackEntity) -> Unit,
     onPlayAll: () -> Unit,
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
+    onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
 ) {
     DetailScaffold(
@@ -617,7 +760,14 @@ private fun AlbumDetailView(
         onBack = onBack,
         onPlayAll = onPlayAll
     ) {
-        TrackList(tracks, onPlayTrack, onAddToPlaylist, onDelete)
+        TrackList(
+            tracks = tracks,
+            likedTrackUris = likedTrackUris,
+            onPlay = onPlayTrack,
+            onAddToPlaylist = onAddToPlaylist,
+            onToggleLike = onToggleLike,
+            onDelete = onDelete
+        )
     }
 }
 
@@ -625,10 +775,12 @@ private fun AlbumDetailView(
 private fun GenreDetailView(
     summary: GenreSummary,
     tracks: List<MusicTrackEntity>,
+    likedTrackUris: Set<String>,
     onBack: () -> Unit,
     onPlayTrack: (MusicTrackEntity) -> Unit,
     onPlayAll: () -> Unit,
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
+    onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
 ) {
     DetailScaffold(
@@ -637,7 +789,14 @@ private fun GenreDetailView(
         onBack = onBack,
         onPlayAll = onPlayAll
     ) {
-        TrackList(tracks, onPlayTrack, onAddToPlaylist, onDelete)
+        TrackList(
+            tracks = tracks,
+            likedTrackUris = likedTrackUris,
+            onPlay = onPlayTrack,
+            onAddToPlaylist = onAddToPlaylist,
+            onToggleLike = onToggleLike,
+            onDelete = onDelete
+        )
     }
 }
 
@@ -665,28 +824,42 @@ private fun PlaylistDetailView(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(tracks) { track ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-                        .padding(16.dp)
-                ) {
-                    Column {
-                        Text(track.title, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "${track.artist} • ${track.album}",
-                            color = Color.White.copy(alpha = 0.68f),
-                            style = MaterialTheme.typography.bodyMedium
+                LibraryListCard(onClick = { onPlayTrack(track) }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MusicAlbumArtwork(
+                            artworkPath = track.artworkPath,
+                            title = track.title,
+                            modifier = Modifier.size(52.dp),
+                            cornerRadius = 10.dp
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { onPlayTrack(track) }) { Text("Play") }
-                            Button(onClick = { onMoveUp(track) }) { Text("Up") }
-                            Button(onClick = { onMoveDown(track) }) { Text("Down") }
-                            Button(onClick = { onRemove(track) }) { Text("Remove") }
-                            Button(onClick = { onDelete(track) }) { Text("Delete") }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                track.title,
+                                color = MusicScreenColors.TextPrimary,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "${track.artist} • ${track.album}",
+                                color = MusicScreenColors.TextMuted,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(onClick = { onMoveUp(track) }) {
+                            Text("↑", color = MusicScreenColors.TextSecondary)
+                        }
+                        IconButton(onClick = { onMoveDown(track) }) {
+                            Text("↓", color = MusicScreenColors.TextSecondary)
+                        }
+                        IconButton(onClick = { onRemove(track) }) {
+                            Text("✕", color = Color(0xFFFF8A80))
                         }
                     }
                 }
@@ -706,19 +879,36 @@ private fun DetailScaffold(
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(title, color = Color.White, style = MaterialTheme.typography.headlineSmall)
-                Text(subtitle, color = Color.White.copy(alpha = 0.68f))
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MusicScreenColors.TextPrimary
+                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onBack) { Text("Back") }
-                Button(onClick = onPlayAll) { Text("Play All") }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    color = MusicScreenColors.TextPrimary,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(subtitle, color = MusicScreenColors.TextMuted, style = MaterialTheme.typography.bodySmall)
+            }
+            IconButton(onClick = onPlayAll) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Play all",
+                    tint = MusicScreenColors.Accent,
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         content()
     }
 }
@@ -726,8 +916,10 @@ private fun DetailScaffold(
 @Composable
 private fun TrackList(
     tracks: List<MusicTrackEntity>,
+    likedTrackUris: Set<String>,
     onPlay: (MusicTrackEntity) -> Unit,
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
+    onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
 ) {
     LazyColumn(
@@ -738,8 +930,10 @@ private fun TrackList(
         items(tracks) { track ->
             TrackRow(
                 track = track,
+                isLiked = track.uri in likedTrackUris,
                 onPlay = { onPlay(track) },
                 onAddToPlaylist = { onAddToPlaylist(track) },
+                onToggleLike = { onToggleLike(track) },
                 onDelete = { onDelete(track) }
             )
         }
@@ -749,64 +943,85 @@ private fun TrackList(
 @Composable
 private fun TrackRow(
     track: MusicTrackEntity,
+    isLiked: Boolean,
     onPlay: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onToggleLike: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
+    LibraryListCard(onClick = onPlay) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = track.artworkPath?.let(::File),
-                contentDescription = track.title,
-                error = painterResource(R.drawable.music),
-                placeholder = painterResource(R.drawable.music),
-                modifier = Modifier
-                    .width(64.dp)
-                    .height(64.dp)
-                    .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(18.dp))
-                    .clip(RoundedCornerShape(18.dp))
+            MusicAlbumArtwork(
+                artworkPath = track.artworkPath,
+                title = track.title,
+                modifier = Modifier.size(56.dp),
+                cornerRadius = 12.dp
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     track.title,
-                    color = Color.White,
+                    color = MusicScreenColors.TextPrimary,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     "${track.artist} • ${track.album}",
-                    color = Color.White.copy(alpha = 0.68f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    "${track.genre} • ${track.durationMs / 1000}s",
-                    color = Color.White.copy(alpha = 0.48f),
+                    color = MusicScreenColors.TextSecondary,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Text(
+                    formatDuration(track.durationMs),
+                    color = MusicScreenColors.TextMuted,
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onPlay) { Text("Play") }
-                Button(onClick = onAddToPlaylist) { Text("Playlist") }
-                Button(onClick = onDelete) { Text("Delete") }
+            IconButton(onClick = onAddToPlaylist) {
+                Icon(
+                    Icons.Default.PlaylistAdd,
+                    contentDescription = "Add to playlist",
+                    tint = MusicScreenColors.TextSecondary
+                )
+            }
+            IconButton(onClick = onToggleLike) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = if (isLiked) "Unlike" else "Like",
+                    tint = if (isLiked) MusicScreenColors.Accent else MusicScreenColors.TextSecondary
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = Color(0xFFFF8A80)
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun LibraryListCard(
+    onClick: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MusicScreenColors.RowFill)
+            .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(16.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        content()
     }
 }
 
@@ -817,71 +1032,33 @@ private fun SummaryRow(
     artworkPath: String?,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
-            .padding(16.dp)
-    ) {
+    LibraryListCard(onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = artworkPath?.let(::File),
-                contentDescription = title,
-                error = painterResource(R.drawable.music),
-                placeholder = painterResource(R.drawable.music),
-                modifier = Modifier
-                    .width(64.dp)
-                    .height(64.dp)
-                    .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(18.dp))
-                    .clip(RoundedCornerShape(18.dp))
+            MusicAlbumArtwork(
+                artworkPath = artworkPath,
+                title = title,
+                modifier = Modifier.size(56.dp),
+                cornerRadius = 12.dp
             )
             Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    color = MusicScreenColors.TextPrimary,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Text(
                     subtitle,
-                    color = Color.White.copy(alpha = 0.68f),
-                    style = MaterialTheme.typography.bodyMedium
+                    color = MusicScreenColors.TextMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
     }
-}
-
-@Composable
-private fun TextInputDialog(
-    title: String,
-    initialValue: String,
-    confirmLabel: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    var value by remember(initialValue) { mutableStateOf(initialValue) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it },
-                label = { Text("Name") },
-                singleLine = true
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(value) }) {
-                Text(confirmLabel)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }
 
 private fun List<MusicTrackEntity>.filterTrackSearch(query: String): List<MusicTrackEntity> {

@@ -6,6 +6,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.ruchitech.carlanuchertab.music.LikedTrackEntity
 import com.ruchitech.carlanuchertab.music.MusicDao
 import com.ruchitech.carlanuchertab.music.MusicSettingsEntity
 import com.ruchitech.carlanuchertab.music.MusicTrackEntity
@@ -51,13 +52,32 @@ abstract class AppDatabase : RoomDatabase() {
         MusicTrackEntity::class,
         PlaylistEntity::class,
         PlaylistTrackEntity::class,
+        LikedTrackEntity::class,
     ],
-    version = 3
+    version = 4
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dashboardDao(): DashboardDao
     abstract fun musicDao(): MusicDao
+}
+
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `liked_tracks` (
+                `trackUri` TEXT NOT NULL,
+                `likedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`trackUri`),
+                FOREIGN KEY(`trackUri`) REFERENCES `music_tracks`(`uri`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_liked_tracks_likedAt` ON `liked_tracks` (`likedAt`)"
+        )
+    }
 }
 
 private val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -154,7 +174,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "car_launcher_db"
-        ).addMigrations(MIGRATION_2_3)
+        ).addMigrations(MIGRATION_2_3, MIGRATION_3_4)
             .build()
     }
 

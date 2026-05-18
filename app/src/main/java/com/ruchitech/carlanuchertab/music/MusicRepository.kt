@@ -56,6 +56,8 @@ class MusicRepository @Inject constructor(
 
     val playlistsFlow: Flow<List<PlaylistWithCount>> = musicDao.observePlaylistsWithCount()
 
+    val likedTracksFlow: Flow<List<MusicTrackEntity>> = musicDao.observeLikedTracks()
+
     fun observeAlbumTracks(album: String, artist: String): Flow<List<MusicTrackEntity>> {
         return musicDao.observeTracksForAlbum(album, artist)
     }
@@ -201,6 +203,22 @@ class MusicRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             musicDao.getTracksForPlaylist(playlistId)
         }
+
+    suspend fun getLikedTracks(): List<MusicTrackEntity> = withContext(Dispatchers.IO) {
+        musicDao.getLikedTracks()
+    }
+
+    suspend fun isTrackLiked(trackUri: String): Boolean = withContext(Dispatchers.IO) {
+        musicDao.isTrackLiked(trackUri)
+    }
+
+    suspend fun setTrackLiked(trackUri: String, liked: Boolean) = withContext(Dispatchers.IO) {
+        if (liked) {
+            musicDao.insertLikedTrack(LikedTrackEntity(trackUri = trackUri))
+        } else {
+            musicDao.removeLikedTrack(trackUri)
+        }
+    }
 
     suspend fun deleteTrack(trackUri: String): Result<Unit> = withContext(Dispatchers.IO) {
         val track = musicDao.getTrack(trackUri)

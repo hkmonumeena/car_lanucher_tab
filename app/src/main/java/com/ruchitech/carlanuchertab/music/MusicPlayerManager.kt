@@ -167,10 +167,18 @@ class MusicPlayerManager @Inject constructor(
     }
 
     private fun ensureServiceRunning() {
-        ContextCompat.startForegroundService(
-            appContext,
-            Intent(appContext, MusicPlaybackService::class.java)
-        )
+        val intent = Intent(appContext, MusicPlaybackService::class.java)
+        try {
+            // Try starting as a regular service first. This works if the app is in the foreground.
+            // It avoids the immediate requirement to call startForeground() within 5 seconds,
+            // which can cause crashes if the player takes time to prepare/start.
+            appContext.startService(intent)
+        } catch (e: Exception) {
+            // If the app is in the background, startService() might fail on API 26+.
+            // We then fallback to startForegroundService().
+            // MediaSessionService will call startForeground() once playback starts.
+            ContextCompat.startForegroundService(appContext, intent)
+        }
     }
 
     private fun buildPlayer(): ExoPlayer {

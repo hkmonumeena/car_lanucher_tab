@@ -149,6 +149,38 @@ interface MusicDao {
     @Query("SELECT COALESCE(MAX(position), -1) FROM playlist_tracks WHERE playlistId = :playlistId")
     suspend fun getPlaylistMaxPosition(playlistId: Long): Int
 
+    @Query(
+        """
+        SELECT t.* FROM music_tracks t
+        INNER JOIN liked_tracks l ON l.trackUri = t.uri
+        WHERE t.isAvailable = 1
+        ORDER BY l.likedAt DESC
+        """
+    )
+    fun observeLikedTracks(): Flow<List<MusicTrackEntity>>
+
+    @Query(
+        """
+        SELECT t.* FROM music_tracks t
+        INNER JOIN liked_tracks l ON l.trackUri = t.uri
+        WHERE t.isAvailable = 1
+        ORDER BY l.likedAt DESC
+        """
+    )
+    suspend fun getLikedTracks(): List<MusicTrackEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM liked_tracks WHERE trackUri = :trackUri)")
+    suspend fun isTrackLiked(trackUri: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLikedTrack(likedTrack: LikedTrackEntity)
+
+    @Query("DELETE FROM liked_tracks WHERE trackUri = :trackUri")
+    suspend fun removeLikedTrack(trackUri: String)
+
+    @Query("DELETE FROM liked_tracks WHERE trackUri NOT IN (SELECT uri FROM music_tracks)")
+    suspend fun deleteOrphanLikedTracks()
+
     @Transaction
     suspend fun replaceLibrary(tracks: List<MusicTrackEntity>) {
         clearTracks()
@@ -156,6 +188,7 @@ interface MusicDao {
             insertTracks(tracks)
         }
         deleteOrphanPlaylistTracks()
+        deleteOrphanLikedTracks()
     }
 
     @Transaction
@@ -193,6 +226,7 @@ interface MusicDao {
     @Transaction
     suspend fun deleteTrackFromLibrary(trackUri: String) {
         removeTrackFromAllPlaylists(trackUri)
+        removeLikedTrack(trackUri)
         deleteTrackEntity(trackUri)
     }
 }

@@ -49,6 +49,12 @@ class MusicViewModel @Inject constructor(
         emptyList()
     )
 
+    val likedTracks = repository.likedTracksFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList()
+    )
+
     val playerState: StateFlow<MusicPlayerUiState> = playerManager.playerState
 
     private val _messages = MutableSharedFlow<String>()
@@ -188,6 +194,26 @@ class MusicViewModel @Inject constructor(
             val playlistTracks = repository.getPlaylistTracks(playlistId)
             playTrackFromList(playlistTracks, startTrackUri)
         }
+    }
+
+    fun playLikedSongs(startTrackUri: String) {
+        viewModelScope.launch {
+            val liked = repository.getLikedTracks()
+            playTrackFromList(liked, startTrackUri)
+        }
+    }
+
+    fun toggleLike(trackUri: String) {
+        viewModelScope.launch {
+            val liked = repository.isTrackLiked(trackUri)
+            repository.setTrackLiked(trackUri, !liked)
+            _messages.emit(if (liked) "Removed from liked songs." else "Added to liked songs.")
+        }
+    }
+
+    fun toggleLikeCurrentTrack() {
+        val trackUri = playerState.value.currentTrack?.uri ?: return
+        toggleLike(trackUri)
     }
 
     fun togglePlayback() {

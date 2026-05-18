@@ -111,6 +111,24 @@ data class PlaylistWithCount(
     val songCount: Int,
 )
 
+@Entity(
+    tableName = "liked_tracks",
+    foreignKeys = [
+        ForeignKey(
+            entity = MusicTrackEntity::class,
+            parentColumns = ["uri"],
+            childColumns = ["trackUri"],
+            onDelete = ForeignKey.CASCADE
+        ),
+    ],
+    indices = [Index(value = ["likedAt"])]
+)
+data class LikedTrackEntity(
+    @PrimaryKey
+    val trackUri: String,
+    val likedAt: Long = System.currentTimeMillis(),
+)
+
 data class PlaylistTrackWithSong(
     val uri: String,
     val displayName: String,
