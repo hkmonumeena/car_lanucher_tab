@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,25 +29,43 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -72,9 +92,14 @@ import com.ruchitech.carlanuchertab.music.MusicScanStatus
 import com.ruchitech.carlanuchertab.music.MusicSettingsEntity
 import com.ruchitech.carlanuchertab.music.MusicTrackEntity
 import com.ruchitech.carlanuchertab.music.MusicViewModel
+import androidx.media3.common.Player
 import java.io.File
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 enum class MusicPlayerStyle {
+    /** Full card — home screen inside [HomeGlassPanel]. */
+    HomeGlass,
     Compact,
     Expanded,
 }
@@ -108,10 +133,11 @@ fun MusicUi(
 
     val currentTrack = playerState.currentTrack
     val isCurrentTrackLiked = currentTrack != null && likedTracks.any { it.uri == currentTrack.uri }
+    var showQueueSheet by remember { mutableStateOf(false) }
 
     MusicPlayerPanel(
         modifier = modifier,
-        style = MusicPlayerStyle.Compact,
+        style = MusicPlayerStyle.HomeGlass,
         settings = settings,
         playerState = playerState,
         allowDelete = false,
@@ -123,7 +149,24 @@ fun MusicUi(
         onDelete = {},
         onOpenLibrary = onOpenLibrary,
         onToggleLike = viewModel::toggleLikeCurrentTrack,
-        onAddToPlaylist = { showAddToPlaylistDialog = true }
+        onAddToPlaylist = { showAddToPlaylistDialog = true },
+        onToggleShuffle = viewModel::toggleShuffle,
+        onCycleRepeat = viewModel::cycleRepeatMode,
+        onOpenQueue = { showQueueSheet = true },
+    )
+
+    MusicQueueBottomSheet(
+        visible = showQueueSheet,
+        onDismiss = { showQueueSheet = false },
+        playerState = playerState,
+        onCrossfadeChange = viewModel::setCrossfadeEnabled,
+        onMoveQueueItem = viewModel::moveQueueItem,
+        onRemoveQueueItem = viewModel::removeQueueItem,
+        onClearQueue = {
+            viewModel.clearQueue()
+            showQueueSheet = false
+        },
+        onPlayQueueIndex = viewModel::playQueueIndex,
     )
 
     if (showAddToPlaylistDialog && currentTrack != null) {
@@ -173,12 +216,23 @@ fun MusicPlayerPanel(
     onOpenLibrary: () -> Unit,
     onToggleLike: () -> Unit = {},
     onAddToPlaylist: () -> Unit = {},
+    onToggleShuffle: () -> Unit = {},
+    onCycleRepeat: () -> Unit = {},
+    onOpenQueue: () -> Unit = {},
 ) {
-    val cardShape = RoundedCornerShape(if (style == MusicPlayerStyle.Compact) 22.dp else 24.dp)
-    val cardPadding = if (style == MusicPlayerStyle.Compact) 14.dp else 18.dp
+    val isHomeGlass = style == MusicPlayerStyle.HomeGlass
+    val isCompact = style == MusicPlayerStyle.Compact || isHomeGlass
+    val cardShape = RoundedCornerShape(if (isCompact) 22.dp else 24.dp)
+    val cardPadding = when {
+        isHomeGlass -> 14.dp
+        style == MusicPlayerStyle.Compact -> 14.dp
+        else -> 18.dp
+    }
 
-    Box(
-        modifier = modifier
+    val surfaceModifier = if (isHomeGlass) {
+        modifier.fillMaxSize().padding(cardPadding)
+    } else {
+        modifier
             .fillMaxSize()
             .shadow(
                 elevation = if (style == MusicPlayerStyle.Compact) 10.dp else 14.dp,
@@ -194,11 +248,13 @@ fun MusicPlayerPanel(
             )
             .border(1.dp, MusicPalette.GlassBorder, cardShape)
             .padding(cardPadding)
-    ) {
+    }
+
+    Box(modifier = surfaceModifier) {
         when {
             settings.folderUri.isNullOrBlank() -> {
                 EmptyMusicState(
-                    style = style,
+                    style = if (isHomeGlass) MusicPlayerStyle.Compact else style,
                     title = "Add your music",
                     subtitle = "Choose a folder to scan songs, albums, and playlists for this launcher.",
                     actionLabel = "Open library",
@@ -208,7 +264,7 @@ fun MusicPlayerPanel(
 
             settings.scanStatus == MusicScanStatus.SCANNING -> {
                 EmptyMusicState(
-                    style = style,
+                    style = if (isHomeGlass) MusicPlayerStyle.Compact else style,
                     title = "Scanning library",
                     subtitle = "Indexing tracks from your selected folder…",
                     actionLabel = "Open library",
@@ -218,7 +274,7 @@ fun MusicPlayerPanel(
 
             playerState.currentTrack == null -> {
                 EmptyMusicState(
-                    style = style,
+                    style = if (isHomeGlass) MusicPlayerStyle.Compact else style,
                     title = "Nothing playing",
                     subtitle = settings.errorMessage ?: "Pick a song from the library to start playback.",
                     actionLabel = "Browse music",
@@ -231,6 +287,7 @@ fun MusicPlayerPanel(
                 var dragDistance by remember(track.uri) { mutableFloatStateOf(0f) }
 
                 when (style) {
+                    MusicPlayerStyle.HomeGlass,
                     MusicPlayerStyle.Compact -> CompactNowPlaying(
                         track = track,
                         playerState = playerState,
@@ -242,6 +299,9 @@ fun MusicPlayerPanel(
                         onSkipPrevious = onSkipPrevious,
                         onToggleLike = onToggleLike,
                         onAddToPlaylist = onAddToPlaylist,
+                        onToggleShuffle = onToggleShuffle,
+                        onCycleRepeat = onCycleRepeat,
+                        onOpenQueue = onOpenQueue,
                         dragModifier = Modifier.pointerInput(track.uri) {
                             detectHorizontalDragGestures(
                                 onDragEnd = { dragDistance = 0f },
@@ -276,6 +336,9 @@ fun MusicPlayerPanel(
                         onSkipPrevious = onSkipPrevious,
                         onToggleLike = onToggleLike,
                         onAddToPlaylist = onAddToPlaylist,
+                        onToggleShuffle = onToggleShuffle,
+                        onCycleRepeat = onCycleRepeat,
+                        onOpenQueue = onOpenQueue,
                         dragModifier = Modifier.pointerInput(track.uri) {
                             detectHorizontalDragGestures(
                                 onDragEnd = { dragDistance = 0f },
@@ -364,6 +427,9 @@ private fun CompactNowPlaying(
     onSkipPrevious: () -> Unit,
     onToggleLike: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onOpenQueue: () -> Unit,
     dragModifier: Modifier,
 ) {
     Column(
@@ -419,6 +485,7 @@ private fun CompactNowPlaying(
         Spacer(modifier = Modifier.height(10.dp))
 
         TrackMetadata(
+            trackUri = track.uri,
             title = track.title,
             artist = track.artist,
             album = track.album,
@@ -435,10 +502,15 @@ private fun CompactNowPlaying(
             progressMs = playerState.progressMs,
             durationMs = playerState.durationMs,
             onPositionChange = onSeekTo,
-            compact = true
+            compact = true,
+            shuffleEnabled = playerState.shuffleEnabled,
+            repeatMode = playerState.repeatMode,
+            onToggleShuffle = onToggleShuffle,
+            onCycleRepeat = onCycleRepeat,
+            onOpenQueue = onOpenQueue,
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         PlayerControlsRow(
             isPlaying = playerState.isPlaying,
@@ -468,6 +540,9 @@ private fun ExpandedNowPlaying(
     onSkipPrevious: () -> Unit,
     onToggleLike: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onOpenQueue: () -> Unit,
     dragModifier: Modifier,
 ) {
     Column(
@@ -513,6 +588,7 @@ private fun ExpandedNowPlaying(
         Spacer(modifier = Modifier.height(14.dp))
 
         TrackMetadata(
+            trackUri = track.uri,
             title = track.title,
             artist = track.artist,
             album = track.album,
@@ -529,10 +605,15 @@ private fun ExpandedNowPlaying(
             progressMs = playerState.progressMs,
             durationMs = playerState.durationMs,
             onPositionChange = onSeekTo,
-            compact = false
+            compact = false,
+            shuffleEnabled = playerState.shuffleEnabled,
+            repeatMode = playerState.repeatMode,
+            onToggleShuffle = onToggleShuffle,
+            onCycleRepeat = onCycleRepeat,
+            onOpenQueue = onOpenQueue,
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         PlayerControlsRow(
             isPlaying = playerState.isPlaying,
@@ -544,6 +625,246 @@ private fun ExpandedNowPlaying(
             playIconSize = 32.dp,
             sideIconSize = 26.dp
         )
+    }
+}
+
+@Composable
+private fun InlinePlaybackTransport(
+    shuffleEnabled: Boolean,
+    repeatMode: Int,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onOpenQueue: () -> Unit,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val iconSize = if (compact) 18.dp else 20.dp
+    val btnSize = if (compact) 32.dp else 36.dp
+    Row(
+        modifier = modifier.wrapContentWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onToggleShuffle, modifier = Modifier.size(btnSize)) {
+            Icon(
+                imageVector = Icons.Default.Shuffle,
+                contentDescription = "Shuffle",
+                tint = if (shuffleEnabled) MusicPalette.Accent else MusicPalette.TextSecondary,
+                modifier = Modifier.size(iconSize)
+            )
+        }
+        IconButton(onClick = onCycleRepeat, modifier = Modifier.size(btnSize)) {
+            val active = repeatMode != Player.REPEAT_MODE_OFF
+            Icon(
+                imageVector = if (repeatMode == Player.REPEAT_MODE_ONE) {
+                    Icons.Default.RepeatOne
+                } else {
+                    Icons.Default.Repeat
+                },
+                contentDescription = "Repeat",
+                tint = if (active) MusicPalette.Accent else MusicPalette.TextSecondary.copy(alpha = 0.45f),
+                modifier = Modifier.size(iconSize)
+            )
+        }
+        IconButton(onClick = onOpenQueue, modifier = Modifier.size(btnSize)) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                contentDescription = "Queue",
+                tint = MusicPalette.TextSecondary,
+                modifier = Modifier.size(iconSize)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MusicQueueBottomSheet(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    playerState: MusicPlayerUiState,
+    onCrossfadeChange: (Boolean) -> Unit,
+    onMoveQueueItem: (from: Int, to: Int) -> Unit,
+    onRemoveQueueItem: (index: Int) -> Unit,
+    onClearQueue: () -> Unit,
+    onPlayQueueIndex: (index: Int) -> Unit,
+) {
+    if (!visible) return
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val queue = playerState.currentQueue
+    val cur = playerState.currentIndex
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MusicPalette.CardBottom,
+        contentColor = MusicPalette.TextPrimary,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 520.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Queue",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MusicPalette.TextPrimary
+                )
+                TextButton(
+                    onClick = onClearQueue,
+                    enabled = queue.isNotEmpty()
+                ) {
+                    Text("Clear", color = MusicPalette.Accent)
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Crossfade", color = MusicPalette.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                Switch(
+                    checked = playerState.crossfadeMs > 0,
+                    onCheckedChange = onCrossfadeChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MusicPalette.Accent,
+                        checkedTrackColor = MusicPalette.Accent.copy(alpha = 0.35f)
+                    )
+                )
+            }
+            HorizontalDivider(color = MusicPalette.GlassBorder, modifier = Modifier.padding(vertical = 8.dp))
+            if (queue.isEmpty()) {
+                Text(
+                    "No songs in the queue.",
+                    color = MusicPalette.TextMuted,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 24.dp)
+                )
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (cur in queue.indices) {
+                        item {
+                            Text(
+                                "Now playing",
+                                color = MusicPalette.Accent,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                        item {
+                            QueueSheetTrackRow(
+                                track = queue[cur],
+                                index = cur,
+                                isCurrent = true,
+                                queueSize = queue.size,
+                                onPlay = { onPlayQueueIndex(cur) },
+                                onMoveUp = { onMoveQueueItem(cur, cur - 1) },
+                                onMoveDown = { onMoveQueueItem(cur, cur + 1) },
+                                onRemove = { onRemoveQueueItem(cur) },
+                            )
+                        }
+                    }
+                    val upNextStart = cur + 1
+                    if (upNextStart < queue.size) {
+                        item {
+                            Text(
+                                "Up next",
+                                color = MusicPalette.Accent,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(
+                            count = queue.size - upNextStart,
+                            key = { i -> queue[upNextStart + i].uri }
+                        ) { i ->
+                            val idx = upNextStart + i
+                            QueueSheetTrackRow(
+                                track = queue[idx],
+                                index = idx,
+                                isCurrent = false,
+                                queueSize = queue.size,
+                                onPlay = { onPlayQueueIndex(idx) },
+                                onMoveUp = { onMoveQueueItem(idx, idx - 1) },
+                                onMoveDown = { onMoveQueueItem(idx, idx + 1) },
+                                onRemove = { onRemoveQueueItem(idx) },
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun QueueSheetTrackRow(
+    track: MusicTrackEntity,
+    index: Int,
+    isCurrent: Boolean,
+    queueSize: Int,
+    onPlay: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val bg = if (isCurrent) MusicPalette.ControlFillActive else MusicPalette.ControlFill
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(1.dp, MusicPalette.GlassBorder, RoundedCornerShape(12.dp))
+            .clickable(onClick = onPlay)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                track.title,
+                color = MusicPalette.TextPrimary,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                track.artist,
+                color = MusicPalette.TextMuted,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(
+            onClick = onMoveUp,
+            enabled = index > 0,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Text("↑", color = if (index > 0) MusicPalette.TextSecondary else MusicPalette.TextMuted)
+        }
+        IconButton(
+            onClick = onMoveDown,
+            enabled = index < queueSize - 1,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Text("↓", color = if (index < queueSize - 1) MusicPalette.TextSecondary else MusicPalette.TextMuted)
+        }
+        IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
+            Text("✕", color = Color(0xFFFF8A80))
+        }
     }
 }
 
@@ -614,6 +935,7 @@ private fun PlayerTopActions(
 
 @Composable
 private fun TrackMetadata(
+    trackUri: String,
     title: String,
     artist: String,
     album: String,
@@ -623,49 +945,107 @@ private fun TrackMetadata(
     modifier: Modifier = Modifier,
     centered: Boolean = false,
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start
-    ) {
-        Text(
-            text = title,
-            color = MusicPalette.TextPrimary,
-            style = titleStyle,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = if (compact) 2 else 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = if (centered) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(if (compact) 4.dp else 6.dp))
-        Text(
-            text = artist,
-            color = MusicPalette.TextSecondary,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = if (centered) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth()
-        )
-        if (!compact) {
-            Spacer(modifier = Modifier.height(2.dp))
+    val snapshot = TrackMetaSnapshot(
+        uri = trackUri,
+        title = title,
+        artist = artist,
+        album = album,
+        genre = genre,
+    )
+    val metaEnter = fadeIn(animationSpec = tween(400, easing = FastOutSlowInEasing)) +
+        slideInVertically(animationSpec = tween(400, easing = FastOutSlowInEasing)) { full -> full / 12 }
+    val metaExit = fadeOut(animationSpec = tween(280)) +
+        slideOutVertically(animationSpec = tween(280)) { full -> -full / 12 }
+
+    AnimatedContent(
+        targetState = snapshot,
+        transitionSpec = { metaEnter.togetherWith(metaExit) },
+        modifier = modifier.fillMaxWidth(),
+        label = "trackChange",
+    ) { meta ->
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start
+        ) {
             Text(
-                text = album,
-                color = MusicPalette.TextMuted,
-                style = MaterialTheme.typography.bodyMedium,
+                text = meta.title,
+                color = MusicPalette.TextPrimary,
+                style = titleStyle,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = if (compact) 2 else 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = if (centered) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(if (compact) 4.dp else 6.dp))
+            Text(
+                text = meta.artist,
+                color = MusicPalette.TextSecondary,
+                style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = if (centered) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            if (!compact) {
+                Spacer(modifier = Modifier.height(6.dp))
+                CyclingAlbumGenre(
+                    album = meta.album,
+                    genre = meta.genre,
+                    trackUri = meta.uri,
+                    centered = centered,
+                )
+            }
+        }
+    }
+}
+
+private data class TrackMetaSnapshot(
+    val uri: String,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val genre: String,
+)
+
+@Composable
+private fun CyclingAlbumGenre(
+    album: String,
+    genre: String,
+    trackUri: String,
+    centered: Boolean,
+) {
+    var phase by remember(trackUri) { mutableIntStateOf(0) }
+    LaunchedEffect(trackUri) {
+        while (isActive) {
+            delay(3200)
+            phase = 1 - phase
+        }
+    }
+    val textAlign = if (centered) TextAlign.Center else TextAlign.Start
+    val cycleEnter = fadeIn(animationSpec = tween(420, easing = FastOutSlowInEasing)) +
+        slideInVertically(animationSpec = tween(420, easing = FastOutSlowInEasing)) { h -> (h * 0.1f).toInt().coerceAtLeast(1) }
+    val cycleExit = fadeOut(animationSpec = tween(300)) +
+        slideOutVertically(animationSpec = tween(300)) { h -> (-h * 0.1f).toInt().coerceAtMost(-1) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 26.dp),
+        contentAlignment = if (centered) Alignment.Center else Alignment.CenterStart
+    ) {
+        AnimatedContent(
+            targetState = phase,
+            transitionSpec = { cycleEnter.togetherWith(cycleExit) },
+            label = "albumGenre",
+        ) { p ->
             Text(
-                text = genre,
-                color = MusicPalette.TextMuted.copy(alpha = 0.85f),
-                style = MaterialTheme.typography.labelMedium,
+                text = if (p == 0) album else genre,
+                color = MusicPalette.TextMuted,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = if (centered) TextAlign.Center else TextAlign.Start,
+                textAlign = textAlign,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -825,6 +1205,11 @@ private fun PlaybackSlider(
     durationMs: Long,
     onPositionChange: (Long) -> Unit,
     compact: Boolean,
+    shuffleEnabled: Boolean,
+    repeatMode: Int,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onOpenQueue: () -> Unit,
 ) {
     var sliderPosition by remember(progressMs, durationMs) {
         mutableFloatStateOf(progressMs.coerceAtMost(durationMs).toFloat())
@@ -836,6 +1221,7 @@ private fun PlaybackSlider(
         activeTrackColor = MusicPalette.Accent,
         inactiveTrackColor = Color.White.copy(alpha = 0.14f)
     )
+    val timeStyle = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Slider(
@@ -854,17 +1240,32 @@ private fun PlaybackSlider(
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = formatDuration(progressMs),
                 color = MusicPalette.TextMuted,
-                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium
+                style = timeStyle,
+                textAlign = TextAlign.Start,
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
+            )
+            InlinePlaybackTransport(
+                shuffleEnabled = shuffleEnabled,
+                repeatMode = repeatMode,
+                onToggleShuffle = onToggleShuffle,
+                onCycleRepeat = onCycleRepeat,
+                onOpenQueue = onOpenQueue,
+                compact = compact,
+                modifier = Modifier.padding(horizontal = 2.dp)
             )
             Text(
                 text = formatDuration(durationMs),
                 color = MusicPalette.TextMuted,
-                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium
+                style = timeStyle,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
             )
         }
     }

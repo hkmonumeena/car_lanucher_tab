@@ -28,18 +28,7 @@ class MusicRepository @Inject constructor(
     val tracksFlow: Flow<List<MusicTrackEntity>> = musicDao.observeTracks()
 
     val albumsFlow: Flow<List<AlbumSummary>> =
-        tracksFlow.map { tracks ->
-            tracks.groupBy { it.album to it.artist }
-                .map { (key, groupedTracks) ->
-                    AlbumSummary(
-                        album = key.first,
-                        artist = key.second,
-                        songCount = groupedTracks.size,
-                        artworkPath = groupedTracks.firstNotNullOfOrNull { it.artworkPath }
-                    )
-                }
-                .sortedBy { it.album.lowercase() }
-        }
+        tracksFlow.map { tracks -> tracks.toAlbumSummaries() }
 
     val genresFlow: Flow<List<GenreSummary>> =
         tracksFlow.map { tracks ->
@@ -58,8 +47,17 @@ class MusicRepository @Inject constructor(
 
     val likedTracksFlow: Flow<List<MusicTrackEntity>> = musicDao.observeLikedTracks()
 
-    fun observeAlbumTracks(album: String, artist: String): Flow<List<MusicTrackEntity>> {
-        return musicDao.observeTracksForAlbum(album, artist)
+    val recentlyAddedTracksFlow: Flow<List<MusicTrackEntity>> =
+        musicDao.observeRecentlyAddedTracks()
+
+    val recentlyPlayedTracksFlow: Flow<List<MusicTrackEntity>> =
+        musicDao.observeRecentlyPlayedTracks()
+
+    val mostPlayedTracksFlow: Flow<List<MusicTrackEntity>> =
+        musicDao.observeMostPlayedTracks()
+
+    fun observeAlbumTracks(album: String): Flow<List<MusicTrackEntity>> {
+        return musicDao.observeTracksForAlbum(album)
     }
 
     fun observeGenreTracks(genre: String): Flow<List<MusicTrackEntity>> {
@@ -189,9 +187,9 @@ class MusicRepository @Inject constructor(
         musicDao.getTracks()
     }
 
-    suspend fun getAlbumTracks(album: String, artist: String): List<MusicTrackEntity> =
+    suspend fun getAlbumTracks(album: String): List<MusicTrackEntity> =
         withContext(Dispatchers.IO) {
-            musicDao.getTracksForAlbum(album, artist)
+            musicDao.getTracksForAlbum(album)
         }
 
     suspend fun getGenreTracks(genre: String): List<MusicTrackEntity> =
@@ -327,4 +325,30 @@ class MusicRepository @Inject constructor(
         val normalized = this?.substringAfterLast('.', "")?.lowercase().orEmpty()
         return normalized in setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "amr")
     }
+}
+
+private fun albumGroupingKey(album: String): String = album.trim().lowercase()
+
+private fun List<MusicTrackEntity>.toAlbumSummaries(): List<AlbumSummary> {
+    return groupBy { albumGroupingKey(it.album) }
+        .map { (_, groupedTracks) ->
+            val artists = groupedTracks
+                .map { it.artist.trim() }
+                .distinctBy { it.lowercase() }
+            val displayAlbum = groupedTracks
+                .groupBy { it.album.trim() }
+                .maxByOrNull { it.value.size }
+                ?.key
+                ?: groupedTracks.first().album.trim()
+            AlbumSummary(
+                album = displayAlbum,
+                artist = when {
+                    artists.size == 1 -> artists.first()
+                    else -> "Various Artists"
+                },
+                songCount = groupedTracks.size,
+                artworkPath = groupedTracks.firstNotNullOfOrNull { it.artworkPath },
+            )
+        }
+        .sortedBy { it.album.lowercase() }
 }

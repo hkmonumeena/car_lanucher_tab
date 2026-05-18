@@ -101,16 +101,18 @@ import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
 import com.ruchitech.carlanuchertab.rememberVehicleLocationState
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
+import com.ruchitech.carlanuchertab.roomdb.data.FuelQuickFillHints
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
 import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
+import com.ruchitech.carlanuchertab.ui.composables.HomeCinematicOverlay
+import com.ruchitech.carlanuchertab.ui.composables.HomeConnectionBadge
+import com.ruchitech.carlanuchertab.ui.composables.HomeDockPanel
+import com.ruchitech.carlanuchertab.ui.composables.HomeGlassPanel
 import com.ruchitech.carlanuchertab.ui.composables.ModalWallpaper
 import com.ruchitech.carlanuchertab.ui.composables.MusicUi
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.DashboardViewModel
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.FuelLogs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -288,6 +290,14 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState
+    val fuelLogs by viewModel.fuelLogs.collectAsState()
+    val fuelQuickFillHints = remember(fuelLogs) {
+        val last = fuelLogs.firstOrNull()
+        FuelQuickFillHints(
+            lastPricePerLiter = last?.fuelPrice,
+            lastLiters = last?.liters,
+        )
+    }
     val appWidgetManager = AppWidgetManager.getInstance(context)
     val appWidgetHost = remember { AppWidgetHost(context, viewModel.APPWIDGET_HOST_ID) }
     val locationState = rememberVehicleLocationState()
@@ -362,16 +372,17 @@ fun HomeScreen(
                 painter = painterResource(id = uiState.wallpaperId),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.FillBounds
+                contentScale = ContentScale.Crop
             )
+
+            HomeCinematicOverlay()
 
             if (uiState.addFuelLog) {
                 FuelLogDialog(
                     onDismiss = { viewModel.hideAddFuelLogDialog() },
+                    quickFillHints = fuelQuickFillHints,
                     onSubmit = { newLog ->
-                        CoroutineScope(Dispatchers.IO).launch {
-                            viewModel.dashboardDao.insertLog(newLog)
-                        }
+                        viewModel.insertFuelLog(newLog)
                     })
             }
 
@@ -418,35 +429,80 @@ fun HomeScreen(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-
-                Box(
+                Column(
                     modifier = Modifier
-                        .weight(1.25F)
+                        .weight(1.22f)
                         .fillMaxSize()
                 ) {
-                    Box(
+                    if (uiState.serverStarted) {
+                        HomeConnectionBadge(
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    HomeGlassPanel(
                         modifier = Modifier
-                            .wrapContentWidth()
-                            .background(Color(0x00000000))
-                            .align(alignment = Alignment.BottomCenter),
+                            .weight(1f)
+                            .fillMaxWidth()
                     ) {
                         Box(
                             modifier = Modifier
-                                .align(alignment = Alignment.CenterEnd)
-                                .padding(bottom = 40.dp)
+                                .fillMaxSize()
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
                         ) {
+                            ShowAnalogClock(
+                                modifier = Modifier.wrapContentSize(),
+                                compact = true
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    HomeDockPanel(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            HomeBottomIcons(
+                                onClick = { bottomNavItem ->
+                                    when (bottomNavItem) {
+                                        NavItem.AllApps -> onNavigated(bottomNavItem)
+                                        NavItem.Fuel -> viewModel.showFuelLogsModal()
+                                        NavItem.Map -> {}
+                                        NavItem.Music -> onNavigated(bottomNavItem)
+                                        NavItem.Radio -> {
+                                            val packageName = "com.tw.radio"
+                                            val launchIntent =
+                                                context.packageManager.getLaunchIntentForPackage(packageName)
+                                            if (launchIntent != null) {
+                                                context.startActivity(launchIntent)
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    "App not installed",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                        NavItem.Settings -> viewModel.toggleSettings()
+                                    }
+                                }
+                            )
                             WidgetsDropdownMenu(
                                 expanded = uiState.showSettings,
                                 modifier = Modifier
                                     .wrapContentSize()
-                                    .align(alignment = Alignment.BottomEnd),
-                                onDismissRequest = {
-                                    viewModel.toggleSettings()
-                                },
+                                    .align(Alignment.TopEnd),
+                                onDismissRequest = { viewModel.toggleSettings() },
                                 onMenuAction = { action ->
                                     if (action is WidgetMenuAction.AddWidget) {
                                         val appWidgetId = appWidgetHost.allocateAppWidgetId()
@@ -454,121 +510,30 @@ fun HomeScreen(
                                         val intent =
                                             Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
                                                 putExtra(
-                                                    AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId
+                                                    AppWidgetManager.EXTRA_APPWIDGET_ID,
+                                                    appWidgetId
                                                 )
                                             }
                                         pickWidgetLauncher.launch(intent)
                                         return@WidgetsDropdownMenu
                                     }
                                     viewModel.handleMenuAction(action, context)
-                                })
+                                }
+                            )
                         }
-                        HomeBottomIcons(onClick = { bottomNavItem ->
-                            when (bottomNavItem) {
-                                NavItem.AllApps -> {
-                                    onNavigated(bottomNavItem)
-                                }
-
-                                NavItem.Fuel -> {
-                                    viewModel.showFuelLogsModal()
-                                }
-
-                                NavItem.Map -> {}
-                                NavItem.Music -> {
-                                    onNavigated(bottomNavItem)
-                                }
-
-                                NavItem.Radio -> {
-                                    val packageName = "com.tw.radio"
-                                    val launchIntent =
-                                        context.packageManager.getLaunchIntentForPackage(packageName)
-                                    if (launchIntent != null) {
-                                        context.startActivity(launchIntent)
-                                    } else {
-                                        // onNavigated(bottomNavItem)
-                                        Toast.makeText(
-                                            context, "App not installed", Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                }
-
-                                NavItem.Settings -> {
-                                    viewModel.toggleSettings()
-                                }
-
-                                /*           NavItem.Client -> {
-                                               onNavigated(bottomNavItem)
-                                           }
-
-                                           NavItem.Server -> {
-                                               onNavigated(bottomNavItem)
-                                           }*/
-                            }
-                        })
-
                     }
-                    ShowAnalogClock(
-                        modifier = Modifier
-                            .align(alignment = Alignment.TopCenter)
-                            .wrapContentSize()
-                    )
-
-
-                    if (uiState.serverStarted) {
-                        Image(
-                            modifier = Modifier
-                                .padding(10.dp)
-                                .size(25.dp),
-                            painter = painterResource(R.drawable.connected),
-                            contentDescription = null
-                        )
-                    }
-
-                    /*     Text(
-                             text = "${(locationState.speed * 3.6f).toInt()} km/h",
-                             color = Color.White,
-                             fontSize = 32.sp,
-                             style = MaterialTheme.typography.titleLarge,
-                             modifier = Modifier.padding(top = 10.dp)
-                         )*/
                 }
 
-                Box(
+                HomeGlassPanel(
                     modifier = Modifier
-                        .weight(1F)
+                        .weight(1f)
                         .fillMaxSize()
                 ) {
-                    MusicUi(onOpenLibrary = { onNavigated(NavItem.Music) })
-                }/*                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                ) {
-
-                                    Box(modifier = Modifier.size(260.dp)){
-                                        AnalogSpeedometer(currentSpeed = (locationState.speed * 3.6f).toInt())
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = "${(locationState.speed * 3.6f).toInt()} km/h",
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        modifier = Modifier.padding(top = 10.dp)
-                                    )
-
-                                    Box(
-                                        modifier = Modifier
-                                            .wrapContentWidth()
-                                            .align(alignment = Alignment.BottomCenter)
-                                            .fillMaxHeight()
-                                            .background(Color(0x00000000)) // Semi-transparent black background
-                                    ) {
-
-                                    }
-                                }*//*Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, White.copy(alpha = 0.2F), shape = RoundedCornerShape(10.dp))
-                    .weight(1F)) {
-
-                }*/
+                    MusicUi(
+                        modifier = Modifier.fillMaxSize(),
+                        onOpenLibrary = { onNavigated(NavItem.Music) }
+                    )
+                }
             }
 
             if (uiState.showFuelLogs) {
@@ -576,14 +541,19 @@ fun HomeScreen(
                     modifier = Modifier.align(alignment = Alignment.TopCenter),
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    FuelLogs(onClose = {
-                        viewModel.hideFuelLogsModal()
-                    }, onAddNew = {
-                        viewModel.addFuelLog()
-                    }, viewModel, onDelete = {
-                        itemToDelete = it
-                        deleteDialog = true
-                    })
+                    FuelLogs(
+                        fuelLogs = fuelLogs,
+                        onClose = {
+                            viewModel.hideFuelLogsModal()
+                        },
+                        onAddNew = {
+                            viewModel.addFuelLog()
+                        },
+                        onDelete = {
+                            itemToDelete = it
+                            deleteDialog = true
+                        },
+                    )
                 }
 
                 DeleteConfirmationDialog(showDialog = deleteDialog, onConfirm = {

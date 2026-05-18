@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
+import com.ruchitech.carlanuchertab.roomdb.data.fuelMonthSummaryNow
 
 @Composable
 fun FuelLogsList(
@@ -116,7 +117,19 @@ fun FuelLogsList(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
-            Button(
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (fuelLogs.isNotEmpty()) {
+                    val (monthCount, monthTotal) = fuelMonthSummaryNow(fuelLogs)
+                    Text(
+                        text = "This month: $monthCount fills · ₹$monthTotal",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = Color(0xFF94A3B8),
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Button(
                 onClick = onAddNew,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -144,6 +157,7 @@ fun FuelLogsList(
                     Text("ADD NEW ENTRY", fontWeight = FontWeight.Bold)
                 }
             }
+            }
         }
 
         // List Items
@@ -165,7 +179,7 @@ fun FuelLogsList(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                items(fuelLogs) { log ->
+                items(fuelLogs, key = { it.id }) { log ->
                     PremiumFuelLogItem(log, onDelete = onDelete)
                 }
             }

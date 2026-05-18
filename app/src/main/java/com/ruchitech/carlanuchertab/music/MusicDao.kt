@@ -21,6 +21,68 @@ interface MusicDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSettings(settings: MusicSettingsEntity)
 
+    @Query("SELECT * FROM music_playback_prefs WHERE id = 1 LIMIT 1")
+    fun observePlaybackPrefs(): Flow<MusicPlaybackPrefsEntity?>
+
+    @Query("SELECT * FROM music_playback_prefs WHERE id = 1 LIMIT 1")
+    suspend fun getPlaybackPrefs(): MusicPlaybackPrefsEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPlaybackPrefs(prefs: MusicPlaybackPrefsEntity)
+
+    @Query("SELECT * FROM track_play_stats WHERE trackUri = :trackUri LIMIT 1")
+    suspend fun getTrackPlayStats(trackUri: String): TrackPlayStatsEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTrackPlayStats(stats: TrackPlayStatsEntity)
+
+    @Update
+    suspend fun updateTrackPlayStats(stats: TrackPlayStatsEntity)
+
+    @Transaction
+    suspend fun recordTrackPlayed(trackUri: String) {
+        val now = System.currentTimeMillis()
+        val existing = getTrackPlayStats(trackUri)
+        if (existing == null) {
+            insertTrackPlayStats(
+                TrackPlayStatsEntity(trackUri = trackUri, playCount = 1, lastPlayedAt = now)
+            )
+        } else {
+            updateTrackPlayStats(
+                existing.copy(playCount = existing.playCount + 1, lastPlayedAt = now)
+            )
+        }
+    }
+
+    @Query(
+        """
+        SELECT * FROM music_tracks
+        WHERE isAvailable = 1
+        ORDER BY lastModified DESC, title COLLATE NOCASE ASC
+        """
+    )
+    fun observeRecentlyAddedTracks(): Flow<List<MusicTrackEntity>>
+
+    @Query(
+        """
+        SELECT t.* FROM music_tracks t
+        INNER JOIN track_play_stats s ON s.trackUri = t.uri
+        WHERE t.isAvailable = 1
+        ORDER BY s.lastPlayedAt DESC, t.title COLLATE NOCASE ASC
+        """
+    )
+    fun observeRecentlyPlayedTracks(): Flow<List<MusicTrackEntity>>
+
+    @Query(
+        """
+        SELECT t.* FROM music_tracks t
+        INNER JOIN track_play_stats s ON s.trackUri = t.uri
+        WHERE t.isAvailable = 1
+        ORDER BY s.playCount DESC, s.lastPlayedAt DESC, t.title COLLATE NOCASE ASC
+        """
+    )
+    fun observeMostPlayedTracks(): Flow<List<MusicTrackEntity>>
+
     @Query("SELECT * FROM music_tracks WHERE isAvailable = 1 ORDER BY title COLLATE NOCASE ASC")
     fun observeTracks(): Flow<List<MusicTrackEntity>>
 
@@ -30,20 +92,20 @@ interface MusicDao {
     @Query(
         """
         SELECT * FROM music_tracks
-        WHERE album = :album AND artist = :artist AND isAvailable = 1
+        WHERE LOWER(TRIM(album)) = LOWER(TRIM(:album)) AND isAvailable = 1
         ORDER BY discNumber ASC, trackNumber ASC, title COLLATE NOCASE ASC
         """
     )
-    fun observeTracksForAlbum(album: String, artist: String): Flow<List<MusicTrackEntity>>
+    fun observeTracksForAlbum(album: String): Flow<List<MusicTrackEntity>>
 
     @Query(
         """
         SELECT * FROM music_tracks
-        WHERE album = :album AND artist = :artist AND isAvailable = 1
+        WHERE LOWER(TRIM(album)) = LOWER(TRIM(:album)) AND isAvailable = 1
         ORDER BY discNumber ASC, trackNumber ASC, title COLLATE NOCASE ASC
         """
     )
-    suspend fun getTracksForAlbum(album: String, artist: String): List<MusicTrackEntity>
+    suspend fun getTracksForAlbum(album: String): List<MusicTrackEntity>
 
     @Query(
         """

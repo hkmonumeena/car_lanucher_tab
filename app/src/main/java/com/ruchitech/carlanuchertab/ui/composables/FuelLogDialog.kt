@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -70,7 +72,9 @@ import androidx.compose.ui.window.DialogProperties
 import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.helper.createFuelLogEntry
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
+import com.ruchitech.carlanuchertab.roomdb.data.FuelQuickFillHints
 import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 private fun FuelInputField(
@@ -300,10 +304,77 @@ private fun NumericKeypad(
 }
 
 
+private val FuelPresetRupeeAmounts = listOf(200, 400, 450, 500, 600, 700, 800, 1000)
+
+private fun parseFuelField(raw: String): Double? =
+    raw.takeIf { it.isNotBlank() && it != "." }?.toDoubleOrNull()
+
+private fun roundTwo(value: Double): Double =
+    kotlin.math.round(value * 100.0) / 100.0
+
+private fun formatRupee(value: Double): String {
+    if (value <= 0.0 || !value.isFinite()) return ""
+    return kotlin.math.round(value).toInt().toString()
+}
+
+private fun formatDecimalField(value: Double): String {
+    if (value <= 0.0 || !value.isFinite()) return ""
+    return String.format(Locale.US, "%.2f", roundTwo(value))
+}
+
+/**
+ * Keep the field the user is editing; derive exactly one companion field.
+ * Priority when amount + price exist → liters; amount + liters → price; price + liters → amount.
+ */
+private fun syncFuelFields(
+    active: TextFieldType,
+    rupee: String,
+    price: String,
+    liters: String,
+): Triple<String, String, String> {
+    var r = rupee
+    var p = price
+    var l = liters
+
+    val rupeeVal = parseFuelField(r)
+    val priceVal = parseFuelField(p)
+    val litersVal = parseFuelField(l)
+
+    when (active) {
+        TextFieldType.AMOUNT -> {
+            if (rupeeVal == null || rupeeVal <= 0) return Triple(r, p, l)
+            when {
+                priceVal != null && priceVal > 0 -> l = formatDecimalField(rupeeVal / priceVal)
+                litersVal != null && litersVal > 0 -> p = formatDecimalField(rupeeVal / litersVal)
+            }
+        }
+
+        TextFieldType.PRICE -> {
+            if (priceVal == null || priceVal <= 0) return Triple(r, p, l)
+            when {
+                rupeeVal != null && rupeeVal > 0 -> l = formatDecimalField(rupeeVal / priceVal)
+                litersVal != null && litersVal > 0 -> r = formatRupee(priceVal * litersVal)
+            }
+        }
+
+        TextFieldType.LITERS -> {
+            if (litersVal == null || litersVal <= 0) return Triple(r, p, l)
+            when {
+                rupeeVal != null && rupeeVal > 0 -> p = formatDecimalField(rupeeVal / litersVal)
+                priceVal != null && priceVal > 0 -> r = formatRupee(priceVal * litersVal)
+            }
+        }
+
+        else -> Unit
+    }
+    return Triple(r, p, l)
+}
+
 @Composable
 fun FuelLogDialog(
     onDismiss: () -> Unit,
     onSubmit: (FuelLog) -> Unit,
+    quickFillHints: FuelQuickFillHints? = null,
 ) {
     var rupee by remember { mutableStateOf("") }
     var fuelPrice by remember { mutableStateOf("") }
@@ -311,14 +382,28 @@ fun FuelLogDialog(
     var location by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var activeField by remember { mutableStateOf<TextFieldType?>(null) }
-    listOf(200, 400, 450, 500, 600, 700, 800, 1000)
     val rupeeVal = rupee.toIntOrNull()
     val priceVal = fuelPrice.toFloatOrNull()
     val litersVal = liters.toFloatOrNull()
     val isFormValid = rupeeVal != null && rupeeVal > 0
 
-    LaunchedEffect(true) {
+    fun applyFieldSync(
+        active: TextFieldType,
+        newRupee: String = rupee,
+        newPrice: String = fuelPrice,
+        newLiters: String = liters,
+    ) {
+        val (r, p, l) = syncFuelFields(active, newRupee, newPrice, newLiters)
+        rupee = r
+        fuelPrice = p
+        liters = l
+    }
+
+    LaunchedEffect(Unit) {
         activeField = TextFieldType.AMOUNT
+        quickFillHints?.lastPricePerLiter?.takeIf { it > 0f }?.let { p ->
+            fuelPrice = formatDecimalField(p.toDouble())
+        }
     }
 
     val onKeyPressed = { key: String ->
@@ -326,89 +411,25 @@ fun FuelLogDialog(
             TextFieldType.AMOUNT -> {
                 if (key != ".") {
                     val newRupee = if (rupee == "0") key else rupee + key
-                    rupee = newRupee
-
-                    when {
-                        fuelPrice.isNotEmpty() && liters.isNotEmpty() -> {
-                            fuelPrice = (newRupee.toDoubleOrNull()
-                                ?.div(liters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                                ?.let { "%.2f".format(it) } ?: ""
-                        }
-
-                        fuelPrice.isNotEmpty() -> {
-                            liters = (newRupee.toDoubleOrNull()
-                                ?.div(fuelPrice.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                                ?.let { "%.2f".format(it) } ?: ""
-                        }
-
-                        liters.isNotEmpty() -> {
-                            fuelPrice = (newRupee.toDoubleOrNull()
-                                ?.div(liters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                                ?.let { "%.2f".format(it) } ?: ""
-                        }
-                    }
+                    applyFieldSync(TextFieldType.AMOUNT, newRupee = newRupee)
                 }
             }
 
             TextFieldType.PRICE -> {
                 if (fuelPrice.contains(".") && fuelPrice.substringAfter(".").length >= 2 && key != "⌫") {
-
+                    // max 2 decimal places while typing
                 } else if (key != "." || !fuelPrice.contains(".")) {
                     val newPrice = if (fuelPrice == "0") key else fuelPrice + key
-                    fuelPrice = newPrice
-
-                    when {
-                        rupee.isNotEmpty() && liters.isNotEmpty() -> {
-                            rupee = (newPrice.toDoubleOrNull()
-                                ?.times(liters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                                ?.let { "%.0f".format(it) } ?: ""
-                        }
-
-                        rupee.isNotEmpty() -> {
-                            liters = (rupee.toDoubleOrNull()
-                                ?.div(newPrice.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                                ?.let { "%.2f".format(it) } ?: ""
-                        }
-
-                        liters.isNotEmpty() -> {
-                            rupee = (newPrice.toDoubleOrNull()
-                                ?.times(liters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                                ?.let { "%.0f".format(it) } ?: ""
-                        }
-                    }
+                    applyFieldSync(TextFieldType.PRICE, newPrice = newPrice)
                 }
             }
 
             TextFieldType.LITERS -> {
-                // Prevent more than 2 decimal places
                 if (liters.contains(".") && liters.substringAfter(".").length >= 2 && key != "⌫") {
-                    // Do nothing if already has 2 decimal places
+                    // max 2 decimal places while typing
                 } else if (key != "." || !liters.contains(".")) {
                     val newLiters = if (liters == "0") key else liters + key
-                    val litersValue = newLiters.toDoubleOrNull() ?: 0.0
-
-                    if (litersValue > 37.0) {
-                        // Reset both amount and liters if exceeds 37
-                        rupee = ""
-                        liters = ""
-                    } else {
-                        liters = newLiters
-
-                        when {
-
-                            rupee.isNotEmpty() -> {
-                                fuelPrice = (rupee.toDoubleOrNull()
-                                    ?.div(litersValue.takeIf { it > 0 }
-                                        ?: 1.0))?.let { "%.2f".format(it) } ?: ""
-                            }
-
-                            fuelPrice.isNotEmpty() -> {
-                                rupee = (fuelPrice.toDoubleOrNull()
-                                    ?.times(litersValue))?.takeIf { it > 0 }
-                                    ?.let { "%.0f".format(it) } ?: ""
-                            }
-                        }
-                    }
+                    applyFieldSync(TextFieldType.LITERS, newLiters = newLiters)
                 }
             }
 
@@ -420,82 +441,30 @@ fun FuelLogDialog(
         when (activeField) {
             TextFieldType.AMOUNT -> {
                 val newRupee = if (rupee.length <= 1) "" else rupee.dropLast(1)
-                rupee = newRupee
-
-                when {
-
-                    fuelPrice.isNotEmpty() && liters.isNotEmpty() -> {
-                        fuelPrice = (newRupee.toDoubleOrNull()
-                            ?.div(liters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                            ?.let { "%.2f".format(it) } ?: ""
-                    }
-
-                    newRupee.isEmpty() && (fuelPrice.isNotEmpty() || liters.isNotEmpty()) -> {
-                        fuelPrice = ""
-                        liters = ""
-                    }
-                    // Recalculate based on what's available
-                    fuelPrice.isNotEmpty() -> {
-                        liters = (newRupee.toDoubleOrNull()
-                            ?.div(fuelPrice.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                            ?.let { "%.2f".format(it) } ?: ""
-                    }
-
-                    liters.isNotEmpty() -> {
-                        fuelPrice = (newRupee.toDoubleOrNull()
-                            ?.div(liters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                            ?.let { "%.2f".format(it) } ?: ""
-                    }
+                if (newRupee.isEmpty()) {
+                    rupee = ""
+                    liters = ""
+                } else {
+                    applyFieldSync(TextFieldType.AMOUNT, newRupee = newRupee)
                 }
             }
 
             TextFieldType.PRICE -> {
                 val newPrice = if (fuelPrice.length <= 1) "" else fuelPrice.dropLast(1)
-                fuelPrice = newPrice
-
-                when {
-                    // Clear dependent fields if price is cleared
-                    newPrice.isEmpty() && (rupee.isNotEmpty() || liters.isNotEmpty()) -> {
-                        rupee = ""
-                        liters = ""
-                    }
-                    // Recalculate based on what's available
-                    rupee.isNotEmpty() -> {
-                        liters = (rupee.toDoubleOrNull()
-                            ?.div(newPrice.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                            ?.let { "%.2f".format(it) } ?: ""
-                    }
-
-                    liters.isNotEmpty() -> {
-                        rupee = (newPrice.toDoubleOrNull()
-                            ?.times(liters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                            ?.let { "%.0f".format(it) } ?: ""
-                    }
+                if (newPrice.isEmpty() || newPrice == ".") {
+                    fuelPrice = ""
+                    liters = ""
+                } else {
+                    applyFieldSync(TextFieldType.PRICE, newPrice = newPrice)
                 }
             }
 
             TextFieldType.LITERS -> {
                 val newLiters = if (liters.length <= 1) "" else liters.dropLast(1)
-                liters = newLiters
-
-                when {
-                    // Clear dependent fields if liters is cleared
-                    newLiters.isEmpty() && (rupee.isNotEmpty() || fuelPrice.isNotEmpty()) -> {
-                        rupee = ""
-                        fuelPrice = ""
-                    }
-                    // Recalculate based on what's available
-                    rupee.isNotEmpty() -> {
-                        fuelPrice = (rupee.toDoubleOrNull()
-                            ?.div(newLiters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                            ?.let { "%.2f".format(it) } ?: ""
-                    }
-
-                    fuelPrice.isNotEmpty() -> {
-                        rupee = (fuelPrice.toDoubleOrNull()
-                            ?.times(newLiters.toDoubleOrNull() ?: 1.0))?.takeIf { it > 0 }
-                            ?.let { "%.0f".format(it) } ?: ""
-                    }
+                if (newLiters.isEmpty() || newLiters == ".") {
+                    liters = ""
+                } else {
+                    applyFieldSync(TextFieldType.LITERS, newLiters = newLiters)
                 }
             }
 
@@ -544,6 +513,69 @@ fun FuelLogDialog(
                             },
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FuelPresetRupeeAmounts.forEach { preset ->
+                                OutlinedButton(
+                                    onClick = {
+                                        activeField = TextFieldType.AMOUNT
+                                        applyFieldSync(
+                                            TextFieldType.AMOUNT,
+                                            newRupee = preset.toString(),
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    border = BorderStroke(1.dp, Color(0xFF3A5A78)),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color(0xFFE2E8F0),
+                                    ),
+                                ) {
+                                    Text("₹$preset", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+
+                        quickFillHints?.lastPricePerLiter?.takeIf { it > 0f }?.let { lastPrice ->
+                            OutlinedButton(
+                                onClick = {
+                                    activeField = TextFieldType.PRICE
+                                    val priceStr = formatDecimalField(lastPrice.toDouble())
+                                    if (rupee.isNotEmpty()) {
+                                        applyFieldSync(
+                                            TextFieldType.PRICE,
+                                            newPrice = priceStr,
+                                        )
+                                    } else {
+                                        quickFillHints.lastLiters?.takeIf { it > 0f }?.let { lastL ->
+                                            applyFieldSync(
+                                                TextFieldType.PRICE,
+                                                newPrice = priceStr,
+                                                newLiters = formatDecimalField(lastL.toDouble()),
+                                            )
+                                        } ?: run {
+                                            fuelPrice = priceStr
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, Color(0xFF5D8BF4).copy(alpha = 0.5f)),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = Color(0xFF5D8BF4),
+                                ),
+                            ) {
+                                Text(
+                                    "Same as last (₹%.2f/L)".format(lastPrice),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),

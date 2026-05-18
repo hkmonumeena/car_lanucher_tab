@@ -28,7 +28,9 @@ import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.state.Dashboa
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -75,6 +77,9 @@ class DashboardViewModel @Inject constructor(
 
     private val _uiState = mutableStateOf(DashboardUiState())
     val uiState: State<DashboardUiState> = _uiState
+
+    val fuelLogs: StateFlow<List<FuelLog>> = dashboardDao.observeFuelLogs()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val TAG = "TabbedViewModel"
     private var serverSocket: BluetoothServerSocket? = null
@@ -505,6 +510,12 @@ class DashboardViewModel @Inject constructor(
     fun hideAddFuelLogDialog() {
         val current = _uiState.value
         _uiState.value = current.copy(addFuelLog = false)
+    }
+
+    fun insertFuelLog(log: FuelLog) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dashboardDao.insertLog(log)
+        }
     }
 
     fun deleteFuelLog(fuelLog: FuelLog) {

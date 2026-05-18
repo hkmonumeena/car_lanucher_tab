@@ -20,8 +20,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,6 +83,7 @@ import com.ruchitech.carlanuchertab.ui.composables.MusicAlbumArtwork
 import com.ruchitech.carlanuchertab.ui.composables.MusicConfirmDialog
 import com.ruchitech.carlanuchertab.ui.composables.MusicPlayerPanel
 import com.ruchitech.carlanuchertab.ui.composables.MusicPlayerStyle
+import com.ruchitech.carlanuchertab.ui.composables.MusicQueueBottomSheet
 import com.ruchitech.carlanuchertab.ui.composables.MusicTextInputDialog
 import com.ruchitech.carlanuchertab.ui.composables.formatDuration
 private object MusicScreenColors {
@@ -94,8 +102,14 @@ private enum class MusicTab {
     Playlists,
     Albums,
     Songs,
+    Smart,
     Genres,
     Liked,
+}
+
+private enum class MusicLibraryViewMode {
+    List,
+    Grid,
 }
 
 @Composable
@@ -109,6 +123,9 @@ fun MusicScreen(
     val genres by viewModel.genres.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val likedTracks by viewModel.likedTracks.collectAsState()
+    val recentlyAdded by viewModel.recentlyAddedTracks.collectAsState()
+    val recentlyPlayed by viewModel.recentlyPlayedTracks.collectAsState()
+    val mostPlayed by viewModel.mostPlayedTracks.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
     val likedTrackUris = remember(likedTracks) { likedTracks.map { it.uri }.toSet() }
     val currentTrack = playerState.currentTrack
@@ -116,6 +133,7 @@ fun MusicScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedTab by rememberSaveable { mutableStateOf(MusicTab.Songs) }
+    var libraryViewMode by rememberSaveable { mutableStateOf(MusicLibraryViewMode.List) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var selectedAlbum by remember { mutableStateOf<AlbumSummary?>(null) }
     var selectedGenre by remember { mutableStateOf<GenreSummary?>(null) }
@@ -125,6 +143,7 @@ fun MusicScreen(
     var playlistToRename by remember { mutableStateOf<PlaylistWithCount?>(null) }
     var trackPendingDelete by remember { mutableStateOf<MusicTrackEntity?>(null) }
     var addToPlaylistTrack by remember { mutableStateOf<MusicTrackEntity?>(null) }
+    var showQueueSheet by remember { mutableStateOf(false) }
 
     val folderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -140,6 +159,29 @@ fun MusicScreen(
             snackbarHostState.showSnackbar(message)
         }
     }
+
+    val filteredTracks = remember(tracks, searchQuery) { tracks.filterTrackSearch(searchQuery) }
+    val filteredAlbums = remember(albums, searchQuery) { albums.filterAlbumSearch(searchQuery) }
+    val filteredGenres = remember(genres, searchQuery) { genres.filterGenreSearch(searchQuery) }
+    val filteredPlaylists = remember(playlists, searchQuery) { playlists.filterPlaylistSearch(searchQuery) }
+    val filteredLiked = remember(likedTracks, searchQuery) { likedTracks.filterTrackSearch(searchQuery) }
+    val smartTrackCount = remember(recentlyAdded, recentlyPlayed, mostPlayed, searchQuery) {
+        (recentlyAdded.filterTrackSearch(searchQuery) +
+            recentlyPlayed.filterTrackSearch(searchQuery) +
+            mostPlayed.filterTrackSearch(searchQuery))
+            .distinctBy { it.uri }
+            .size
+    }
+    val libraryCountLabel = when (selectedTab) {
+        MusicTab.Songs -> "${filteredTracks.size} songs"
+        MusicTab.Albums -> "${filteredAlbums.size} albums"
+        MusicTab.Genres -> "${filteredGenres.size} genres"
+        MusicTab.Liked -> "${filteredLiked.size} liked"
+        MusicTab.Playlists -> "${filteredPlaylists.size} playlists"
+        MusicTab.Smart -> "$smartTrackCount songs"
+    }
+    val showLibraryToolbar = !settings.folderUri.isNullOrBlank() &&
+        selectedAlbum == null && selectedGenre == null && selectedPlaylist == null
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -218,6 +260,15 @@ fun MusicScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    if (showLibraryToolbar) {
+                        MusicLibraryToolbar(
+                            countLabel = libraryCountLabel,
+                            viewMode = libraryViewMode,
+                            onViewModeChange = { libraryViewMode = it },
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+
                     when {
                         settings.folderUri.isNullOrBlank() -> {
                             MusicEmptyBrowser(
@@ -240,20 +291,18 @@ fun MusicScreen(
                         selectedAlbum != null -> {
                             AlbumDetailView(
                                 summary = selectedAlbum!!,
-                                tracks = viewModel.albumTracks(
-                                    selectedAlbum!!.album,
-                                    selectedAlbum!!.artist
-                                ).collectAsState().value.filterTrackSearch(searchQuery),
+                                tracks = viewModel.albumTracks(selectedAlbum!!.album)
+                                    .collectAsState().value.filterTrackSearch(searchQuery),
+                                viewMode = libraryViewMode,
+                                onViewModeChange = { libraryViewMode = it },
                                 onBack = { selectedAlbum = null },
                                 onPlayTrack = { track ->
-                                    viewModel.playAlbum(selectedAlbum!!.album, selectedAlbum!!.artist, track.uri)
+                                    viewModel.playAlbum(selectedAlbum!!.album, track.uri)
                                 },
                                 onPlayAll = {
-                                    val first = viewModel.albumTracks(
-                                        selectedAlbum!!.album,
-                                        selectedAlbum!!.artist
-                                    ).value.firstOrNull() ?: return@AlbumDetailView
-                                    viewModel.playAlbum(selectedAlbum!!.album, selectedAlbum!!.artist, first.uri)
+                                    val first = viewModel.albumTracks(selectedAlbum!!.album).value.firstOrNull()
+                                        ?: return@AlbumDetailView
+                                    viewModel.playAlbum(selectedAlbum!!.album, first.uri)
                                 },
                                 likedTrackUris = likedTrackUris,
                                 onAddToPlaylist = { addToPlaylistTrack = it },
@@ -266,6 +315,8 @@ fun MusicScreen(
                             GenreDetailView(
                                 summary = selectedGenre!!,
                                 tracks = viewModel.genreTracks(selectedGenre!!.genre).collectAsState().value.filterTrackSearch(searchQuery),
+                                viewMode = libraryViewMode,
+                                onViewModeChange = { libraryViewMode = it },
                                 onBack = { selectedGenre = null },
                                 onPlayTrack = { track ->
                                     viewModel.playGenre(selectedGenre!!.genre, track.uri)
@@ -287,6 +338,8 @@ fun MusicScreen(
                                 playlist = selectedPlaylist!!,
                                 tracks = viewModel.playlistTracks(selectedPlaylist!!.id)
                                     .collectAsState().value.filterPlaylistTrackSearch(searchQuery),
+                                viewMode = libraryViewMode,
+                                onViewModeChange = { libraryViewMode = it },
                                 onBack = { selectedPlaylist = null },
                                 onPlayTrack = { track ->
                                     viewModel.playPlaylist(selectedPlaylist!!.id, track.uri)
@@ -307,7 +360,8 @@ fun MusicScreen(
 
                         selectedTab == MusicTab.Songs -> {
                             SongListView(
-                                tracks = tracks.filterTrackSearch(searchQuery),
+                                tracks = filteredTracks,
+                                viewMode = libraryViewMode,
                                 likedTrackUris = likedTrackUris,
                                 onPlay = { viewModel.playAllSongs(it.uri) },
                                 onAddToPlaylist = { addToPlaylistTrack = it },
@@ -316,23 +370,43 @@ fun MusicScreen(
                             )
                         }
 
+                        selectedTab == MusicTab.Smart -> {
+                            SmartHubView(
+                                recentlyAdded = recentlyAdded,
+                                recentlyPlayed = recentlyPlayed,
+                                mostPlayed = mostPlayed,
+                                viewMode = libraryViewMode,
+                                likedTrackUris = likedTrackUris,
+                                searchQuery = searchQuery,
+                                onPlayRecent = { viewModel.playRecentlyAdded(it.uri) },
+                                onPlayPlayed = { viewModel.playRecentlyPlayed(it.uri) },
+                                onPlayMost = { viewModel.playMostPlayed(it.uri) },
+                                onAddToPlaylist = { addToPlaylistTrack = it },
+                                onToggleLike = { viewModel.toggleLike(it.uri) },
+                                onDelete = { trackPendingDelete = it }
+                            )
+                        }
+
                         selectedTab == MusicTab.Albums -> {
                             AlbumListView(
-                                albums = albums.filterAlbumSearch(searchQuery),
+                                albums = filteredAlbums,
+                                viewMode = libraryViewMode,
                                 onOpen = { selectedAlbum = it }
                             )
                         }
 
                         selectedTab == MusicTab.Genres -> {
                             GenreListView(
-                                genres = genres.filterGenreSearch(searchQuery),
+                                genres = filteredGenres,
+                                viewMode = libraryViewMode,
                                 onOpen = { selectedGenre = it }
                             )
                         }
 
                         selectedTab == MusicTab.Liked -> {
                             LikedSongsView(
-                                tracks = likedTracks.filterTrackSearch(searchQuery),
+                                tracks = filteredLiked,
+                                viewMode = libraryViewMode,
                                 likedTrackUris = likedTrackUris,
                                 onPlay = { viewModel.playLikedSongs(it.uri) },
                                 onAddToPlaylist = { addToPlaylistTrack = it },
@@ -343,7 +417,8 @@ fun MusicScreen(
 
                         else -> {
                             PlaylistListView(
-                                playlists = playlists.filterPlaylistSearch(searchQuery),
+                                playlists = filteredPlaylists,
+                                viewMode = libraryViewMode,
                                 onCreate = { showCreatePlaylistDialog = true },
                                 onOpen = { selectedPlaylist = it },
                                 onRename = {
@@ -374,7 +449,10 @@ fun MusicScreen(
                     onToggleLike = viewModel::toggleLikeCurrentTrack,
                     onAddToPlaylist = {
                         playerState.currentTrack?.let { addToPlaylistTrack = it }
-                    }
+                    },
+                    onToggleShuffle = viewModel::toggleShuffle,
+                    onCycleRepeat = viewModel::cycleRepeatMode,
+                    onOpenQueue = { showQueueSheet = true },
                 )
             }
         }
@@ -443,6 +521,181 @@ fun MusicScreen(
             }
         )
     }
+
+    MusicQueueBottomSheet(
+        visible = showQueueSheet,
+        onDismiss = { showQueueSheet = false },
+        playerState = playerState,
+        onCrossfadeChange = viewModel::setCrossfadeEnabled,
+        onMoveQueueItem = viewModel::moveQueueItem,
+        onRemoveQueueItem = viewModel::removeQueueItem,
+        onClearQueue = {
+            viewModel.clearQueue()
+            showQueueSheet = false
+        },
+        onPlayQueueIndex = viewModel::playQueueIndex,
+    )
+}
+
+@Composable
+private fun SmartHubView(
+    recentlyAdded: List<MusicTrackEntity>,
+    recentlyPlayed: List<MusicTrackEntity>,
+    mostPlayed: List<MusicTrackEntity>,
+    viewMode: MusicLibraryViewMode,
+    likedTrackUris: Set<String>,
+    searchQuery: String,
+    onPlayRecent: (MusicTrackEntity) -> Unit,
+    onPlayPlayed: (MusicTrackEntity) -> Unit,
+    onPlayMost: (MusicTrackEntity) -> Unit,
+    onAddToPlaylist: (MusicTrackEntity) -> Unit,
+    onToggleLike: (MusicTrackEntity) -> Unit,
+    onDelete: (MusicTrackEntity) -> Unit,
+) {
+    val ra = recentlyAdded.filterTrackSearch(searchQuery)
+    val rp = recentlyPlayed.filterTrackSearch(searchQuery)
+    val mp = mostPlayed.filterTrackSearch(searchQuery)
+
+    if (viewMode == MusicLibraryViewMode.Grid) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(148.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SmartSectionHeader("Recently added")
+            }
+            if (ra.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SmartSectionEmpty("No tracks in the library yet.")
+                }
+            } else {
+                items(ra, key = { "ra_${it.uri}" }) { track ->
+                    TrackGridItem(
+                        track = track,
+                        isLiked = track.uri in likedTrackUris,
+                        onClick = { onPlayRecent(track) },
+                    )
+                }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SmartSectionHeader("Recently played")
+            }
+            if (rp.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SmartSectionEmpty("Play songs to build this list.")
+                }
+            } else {
+                items(rp, key = { "rp_${it.uri}" }) { track ->
+                    TrackGridItem(
+                        track = track,
+                        isLiked = track.uri in likedTrackUris,
+                        onClick = { onPlayPlayed(track) },
+                    )
+                }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SmartSectionHeader("Most played")
+            }
+            if (mp.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SmartSectionEmpty("Counts appear after you listen with the new player.")
+                }
+            } else {
+                items(mp, key = { "mp_${it.uri}" }) { track ->
+                    TrackGridItem(
+                        track = track,
+                        isLiked = track.uri in likedTrackUris,
+                        onClick = { onPlayMost(track) },
+                    )
+                }
+            }
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            SmartSectionHeader("Recently added")
+        }
+        if (ra.isEmpty()) {
+            item { SmartSectionEmpty("No tracks in the library yet.") }
+        } else {
+            items(ra, key = { "ra_${it.uri}" }) { track ->
+                TrackRow(
+                    track = track,
+                    isLiked = track.uri in likedTrackUris,
+                    onPlay = { onPlayRecent(track) },
+                    onAddToPlaylist = { onPlayRecent(track) }, // Corrected callback use
+                    onToggleLike = { onToggleLike(track) },
+                    onDelete = { onDelete(track) }
+                )
+            }
+        }
+        item { Spacer(modifier = Modifier.height(4.dp)) }
+        item {
+            SmartSectionHeader("Recently played")
+        }
+        if (rp.isEmpty()) {
+            item { SmartSectionEmpty("Play songs to build this list.") }
+        } else {
+            items(rp, key = { "rp_${it.uri}" }) { track ->
+                TrackRow(
+                    track = track,
+                    isLiked = track.uri in likedTrackUris,
+                    onPlay = { onPlayPlayed(track) },
+                    onAddToPlaylist = { onAddToPlaylist(track) },
+                    onToggleLike = { onToggleLike(track) },
+                    onDelete = { onDelete(track) }
+                )
+            }
+        }
+        item { Spacer(modifier = Modifier.height(4.dp)) }
+        item {
+            SmartSectionHeader("Most played")
+        }
+        if (mp.isEmpty()) {
+            item { SmartSectionEmpty("Counts appear after you listen with the new player.") }
+        } else {
+            items(mp, key = { "mp_${it.uri}" }) { track ->
+                TrackRow(
+                    track = track,
+                    isLiked = track.uri in likedTrackUris,
+                    onPlay = { onPlayMost(track) },
+                    onAddToPlaylist = { onAddToPlaylist(track) },
+                    onToggleLike = { onToggleLike(track) },
+                    onDelete = { onDelete(track) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartSectionHeader(title: String) {
+    Text(
+        title,
+        color = MusicScreenColors.Accent,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+    )
+}
+
+@Composable
+private fun SmartSectionEmpty(message: String) {
+    Text(
+        message,
+        color = MusicScreenColors.TextMuted,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.padding(vertical = 6.dp)
+    )
 }
 
 @Composable
@@ -543,6 +796,71 @@ private fun MusicTabs(
 }
 
 @Composable
+private fun MusicLibraryToolbar(
+    countLabel: String,
+    viewMode: MusicLibraryViewMode,
+    onViewModeChange: (MusicLibraryViewMode) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = countLabel,
+            color = MusicScreenColors.TextSecondary,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            ViewModeToggleButton(
+                selected = viewMode == MusicLibraryViewMode.List,
+                icon = Icons.AutoMirrored.Filled.ViewList,
+                contentDescription = "List view",
+                onClick = { onViewModeChange(MusicLibraryViewMode.List) },
+            )
+            ViewModeToggleButton(
+                selected = viewMode == MusicLibraryViewMode.Grid,
+                icon = Icons.Default.GridView,
+                contentDescription = "Grid view",
+                onClick = { onViewModeChange(MusicLibraryViewMode.Grid) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ViewModeToggleButton(
+    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                if (selected) MusicScreenColors.Accent.copy(alpha = 0.18f)
+                else Color.Transparent
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected) MusicScreenColors.Accent.copy(alpha = 0.45f) else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
+            ),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (selected) MusicScreenColors.Accent else MusicScreenColors.TextMuted,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
 private fun MusicEmptyBrowser(
     title: String,
     subtitle: String,
@@ -577,25 +895,28 @@ private fun MusicEmptyBrowser(
 @Composable
 private fun SongListView(
     tracks: List<MusicTrackEntity>,
+    viewMode: MusicLibraryViewMode,
     likedTrackUris: Set<String>,
     onPlay: (MusicTrackEntity) -> Unit,
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
     onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
 ) {
-    TrackList(
+    TrackCollectionView(
         tracks = tracks,
+        viewMode = viewMode,
         likedTrackUris = likedTrackUris,
         onPlay = onPlay,
         onAddToPlaylist = onAddToPlaylist,
         onToggleLike = onToggleLike,
-        onDelete = onDelete
+        onDelete = onDelete,
     )
 }
 
 @Composable
 private fun LikedSongsView(
     tracks: List<MusicTrackEntity>,
+    viewMode: MusicLibraryViewMode,
     likedTrackUris: Set<String>,
     onPlay: (MusicTrackEntity) -> Unit,
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
@@ -628,13 +949,14 @@ private fun LikedSongsView(
             )
         }
     } else {
-        TrackList(
+        TrackCollectionView(
             tracks = tracks,
+            viewMode = viewMode,
             likedTrackUris = likedTrackUris,
             onPlay = onPlay,
             onAddToPlaylist = onAddToPlaylist,
             onToggleLike = onToggleLike,
-            onDelete = onDelete
+            onDelete = onDelete,
         )
     }
 }
@@ -642,20 +964,40 @@ private fun LikedSongsView(
 @Composable
 private fun AlbumListView(
     albums: List<AlbumSummary>,
+    viewMode: MusicLibraryViewMode,
     onOpen: (AlbumSummary) -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        items(albums) { album ->
-            SummaryRow(
-                title = album.album,
-                subtitle = "${album.artist} • ${album.songCount} songs",
-                artworkPath = album.artworkPath,
-                onClick = { onOpen(album) }
-            )
+    if (viewMode == MusicLibraryViewMode.Grid) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(132.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(albums, key = { "${it.artist}_${it.album}".lowercase() }) { album ->
+                SummaryGridItem(
+                    title = album.album,
+                    subtitle = "${album.artist} • ${album.songCount} songs",
+                    artworkPath = album.artworkPath,
+                    onClick = { onOpen(album) },
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(albums, key = { "${it.artist}_${it.album}".lowercase() }) { album ->
+                SummaryRow(
+                    title = album.album,
+                    subtitle = "${album.artist} • ${album.songCount} songs",
+                    artworkPath = album.artworkPath,
+                    onClick = { onOpen(album) }
+                )
+            }
         }
     }
 }
@@ -663,20 +1005,40 @@ private fun AlbumListView(
 @Composable
 private fun GenreListView(
     genres: List<GenreSummary>,
+    viewMode: MusicLibraryViewMode,
     onOpen: (GenreSummary) -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        items(genres) { genre ->
-            SummaryRow(
-                title = genre.genre,
-                subtitle = "${genre.songCount} songs",
-                artworkPath = genre.artworkPath,
-                onClick = { onOpen(genre) }
-            )
+    if (viewMode == MusicLibraryViewMode.Grid) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(132.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(genres, key = { it.genre.lowercase() }) { genre ->
+                SummaryGridItem(
+                    title = genre.genre,
+                    subtitle = "${genre.songCount} songs",
+                    artworkPath = genre.artworkPath,
+                    onClick = { onOpen(genre) },
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(genres, key = { it.genre.lowercase() }) { genre ->
+                SummaryRow(
+                    title = genre.genre,
+                    subtitle = "${genre.songCount} songs",
+                    artworkPath = genre.artworkPath,
+                    onClick = { onOpen(genre) }
+                )
+            }
         }
     }
 }
@@ -684,6 +1046,7 @@ private fun GenreListView(
 @Composable
 private fun PlaylistListView(
     playlists: List<PlaylistWithCount>,
+    viewMode: MusicLibraryViewMode,
     onCreate: () -> Unit,
     onOpen: (PlaylistWithCount) -> Unit,
     onRename: (PlaylistWithCount) -> Unit,
@@ -696,44 +1059,63 @@ private fun PlaylistListView(
             Text("New playlist", color = MusicScreenColors.Accent, fontWeight = FontWeight.SemiBold)
         }
         Spacer(modifier = Modifier.height(8.dp))
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(playlists) { playlist ->
-                LibraryListCard(onClick = { onOpen(playlist) }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                playlist.name,
-                                color = MusicScreenColors.TextPrimary,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                "${playlist.songCount} songs",
-                                color = MusicScreenColors.TextMuted,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        IconButton(onClick = { onRename(playlist) }) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "Rename",
-                                tint = MusicScreenColors.TextSecondary
-                            )
-                        }
-                        IconButton(onClick = { onDelete(playlist) }) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = Color(0xFFFF8A80)
-                            )
+        if (viewMode == MusicLibraryViewMode.Grid) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(132.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(playlists, key = { it.id }) { playlist ->
+                    PlaylistGridItem(
+                        playlist = playlist,
+                        onOpen = { onOpen(playlist) },
+                        onRename = { onRename(playlist) },
+                        onDelete = { onDelete(playlist) },
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(playlists, key = { it.id }) { playlist ->
+                    LibraryListCard(onClick = { onOpen(playlist) }) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    playlist.name,
+                                    color = MusicScreenColors.TextPrimary,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "${playlist.songCount} songs",
+                                    color = MusicScreenColors.TextMuted,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            IconButton(onClick = { onRename(playlist) }) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "Rename",
+                                    tint = MusicScreenColors.TextSecondary
+                                )
+                            }
+                            IconButton(onClick = { onDelete(playlist) }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = Color(0xFFFF8A80)
+                                )
+                            }
                         }
                     }
                 }
@@ -746,6 +1128,8 @@ private fun PlaylistListView(
 private fun AlbumDetailView(
     summary: AlbumSummary,
     tracks: List<MusicTrackEntity>,
+    viewMode: MusicLibraryViewMode,
+    onViewModeChange: (MusicLibraryViewMode) -> Unit,
     likedTrackUris: Set<String>,
     onBack: () -> Unit,
     onPlayTrack: (MusicTrackEntity) -> Unit,
@@ -757,16 +1141,20 @@ private fun AlbumDetailView(
     DetailScaffold(
         title = summary.album,
         subtitle = summary.artist,
+        countLabel = "${tracks.size} songs",
+        viewMode = viewMode,
+        onViewModeChange = onViewModeChange,
         onBack = onBack,
         onPlayAll = onPlayAll
     ) {
-        TrackList(
+        TrackCollectionView(
             tracks = tracks,
+            viewMode = viewMode,
             likedTrackUris = likedTrackUris,
             onPlay = onPlayTrack,
             onAddToPlaylist = onAddToPlaylist,
             onToggleLike = onToggleLike,
-            onDelete = onDelete
+            onDelete = onDelete,
         )
     }
 }
@@ -775,6 +1163,8 @@ private fun AlbumDetailView(
 private fun GenreDetailView(
     summary: GenreSummary,
     tracks: List<MusicTrackEntity>,
+    viewMode: MusicLibraryViewMode,
+    onViewModeChange: (MusicLibraryViewMode) -> Unit,
     likedTrackUris: Set<String>,
     onBack: () -> Unit,
     onPlayTrack: (MusicTrackEntity) -> Unit,
@@ -786,16 +1176,20 @@ private fun GenreDetailView(
     DetailScaffold(
         title = summary.genre,
         subtitle = "${summary.songCount} songs",
+        countLabel = "${tracks.size} songs",
+        viewMode = viewMode,
+        onViewModeChange = onViewModeChange,
         onBack = onBack,
         onPlayAll = onPlayAll
     ) {
-        TrackList(
+        TrackCollectionView(
             tracks = tracks,
+            viewMode = viewMode,
             likedTrackUris = likedTrackUris,
             onPlay = onPlayTrack,
             onAddToPlaylist = onAddToPlaylist,
             onToggleLike = onToggleLike,
-            onDelete = onDelete
+            onDelete = onDelete,
         )
     }
 }
@@ -804,6 +1198,8 @@ private fun GenreDetailView(
 private fun PlaylistDetailView(
     playlist: PlaylistWithCount,
     tracks: List<PlaylistTrackWithSong>,
+    viewMode: MusicLibraryViewMode,
+    onViewModeChange: (MusicLibraryViewMode) -> Unit,
     onBack: () -> Unit,
     onPlayTrack: (PlaylistTrackWithSong) -> Unit,
     onPlayAll: () -> Unit,
@@ -815,51 +1211,74 @@ private fun PlaylistDetailView(
     DetailScaffold(
         title = playlist.name,
         subtitle = "${playlist.songCount} songs",
+        countLabel = "${tracks.size} songs",
+        viewMode = viewMode,
+        onViewModeChange = onViewModeChange,
         onBack = onBack,
         onPlayAll = onPlayAll
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(tracks) { track ->
-                LibraryListCard(onClick = { onPlayTrack(track) }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        MusicAlbumArtwork(
-                            artworkPath = track.artworkPath,
-                            title = track.title,
-                            modifier = Modifier.size(52.dp),
-                            cornerRadius = 10.dp
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                track.title,
-                                color = MusicScreenColors.TextPrimary,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+        if (viewMode == MusicLibraryViewMode.Grid) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(148.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                // playlistPosition + uri ensures uniqueness even if the same song is in the playlist twice
+                items(tracks, key = { "${it.playlistPosition}_${it.uri}" }) { track ->
+                    TrackGridItem(
+                        track = track.toMusicTrackEntity(),
+                        isLiked = false,
+                        onClick = { onPlayTrack(track) },
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // playlistPosition + uri ensures uniqueness even if the same song is in the playlist twice
+                items(tracks, key = { "${it.playlistPosition}_${it.uri}" }) { track ->
+                    LibraryListCard(onClick = { onPlayTrack(track) }) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MusicAlbumArtwork(
+                                artworkPath = track.artworkPath,
+                                title = track.title,
+                                modifier = Modifier.size(52.dp),
+                                cornerRadius = 10.dp
                             )
-                            Text(
-                                "${track.artist} • ${track.album}",
-                                color = MusicScreenColors.TextMuted,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        IconButton(onClick = { onMoveUp(track) }) {
-                            Text("↑", color = MusicScreenColors.TextSecondary)
-                        }
-                        IconButton(onClick = { onMoveDown(track) }) {
-                            Text("↓", color = MusicScreenColors.TextSecondary)
-                        }
-                        IconButton(onClick = { onRemove(track) }) {
-                            Text("✕", color = Color(0xFFFF8A80))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    track.title,
+                                    color = MusicScreenColors.TextPrimary,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "${track.artist} • ${track.album}",
+                                    color = MusicScreenColors.TextMuted,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(onClick = { onMoveUp(track) }) {
+                                Text("↑", color = MusicScreenColors.TextSecondary)
+                            }
+                            IconButton(onClick = { onMoveDown(track) }) {
+                                Text("↓", color = MusicScreenColors.TextSecondary)
+                            }
+                            IconButton(onClick = { onRemove(track) }) {
+                                Text("✕", color = Color(0xFFFF8A80))
+                            }
                         }
                     }
                 }
@@ -872,6 +1291,9 @@ private fun PlaylistDetailView(
 private fun DetailScaffold(
     title: String,
     subtitle: String,
+    countLabel: String,
+    viewMode: MusicLibraryViewMode,
+    onViewModeChange: (MusicLibraryViewMode) -> Unit,
     onBack: () -> Unit,
     onPlayAll: () -> Unit,
     content: @Composable () -> Unit,
@@ -908,8 +1330,232 @@ private fun DetailScaffold(
                 )
             }
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        MusicLibraryToolbar(
+            countLabel = countLabel,
+            viewMode = viewMode,
+            onViewModeChange = onViewModeChange,
+        )
         Spacer(modifier = Modifier.height(10.dp))
         content()
+    }
+}
+
+@Composable
+private fun TrackCollectionView(
+    tracks: List<MusicTrackEntity>,
+    viewMode: MusicLibraryViewMode,
+    likedTrackUris: Set<String>,
+    onPlay: (MusicTrackEntity) -> Unit,
+    onAddToPlaylist: (MusicTrackEntity) -> Unit,
+    onToggleLike: (MusicTrackEntity) -> Unit,
+    onDelete: (MusicTrackEntity) -> Unit,
+) {
+    if (viewMode == MusicLibraryViewMode.Grid) {
+        TrackGrid(
+            tracks = tracks,
+            likedTrackUris = likedTrackUris,
+            onPlay = onPlay,
+        )
+    } else {
+        TrackList(
+            tracks = tracks,
+            likedTrackUris = likedTrackUris,
+            onPlay = onPlay,
+            onAddToPlaylist = onAddToPlaylist,
+            onToggleLike = onToggleLike,
+            onDelete = onDelete,
+        )
+    }
+}
+
+@Composable
+private fun TrackGrid(
+    tracks: List<MusicTrackEntity>,
+    likedTrackUris: Set<String>,
+    onPlay: (MusicTrackEntity) -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(148.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(tracks, key = { it.uri }) { track ->
+            TrackGridItem(
+                track = track,
+                isLiked = track.uri in likedTrackUris,
+                onClick = { onPlay(track) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrackGridItem(
+    track: MusicTrackEntity,
+    isLiked: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MusicScreenColors.RowFill)
+            .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+    ) {
+        Box {
+            MusicAlbumArtwork(
+                artworkPath = track.artworkPath,
+                title = track.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                cornerRadius = 10.dp,
+            )
+            if (isLiked) {
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = null,
+                    tint = MusicScreenColors.Accent,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(16.dp),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            track.title,
+            color = MusicScreenColors.TextPrimary,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            track.artist,
+            color = MusicScreenColors.TextMuted,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun SummaryGridItem(
+    title: String,
+    subtitle: String,
+    artworkPath: String?,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MusicScreenColors.RowFill)
+            .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+    ) {
+        MusicAlbumArtwork(
+            artworkPath = artworkPath,
+            title = title,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+            cornerRadius = 10.dp,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            title,
+            color = MusicScreenColors.TextPrimary,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            subtitle,
+            color = MusicScreenColors.TextMuted,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun PlaylistGridItem(
+    playlist: PlaylistWithCount,
+    onOpen: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MusicScreenColors.RowFill)
+            .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(14.dp))
+            .clickable(onClick = onOpen)
+            .padding(8.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MusicScreenColors.Accent.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.PlaylistAdd,
+                contentDescription = null,
+                tint = MusicScreenColors.Accent,
+                modifier = Modifier.size(36.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            playlist.name,
+            color = MusicScreenColors.TextPrimary,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            "${playlist.songCount} songs",
+            color = MusicScreenColors.TextMuted,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            IconButton(onClick = onRename, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Rename",
+                    tint = MusicScreenColors.TextSecondary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = Color(0xFFFF8A80),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
     }
 }
 
@@ -927,7 +1573,7 @@ private fun TrackList(
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(tracks) { track ->
+        items(tracks, key = { it.uri }) { track ->
             TrackRow(
                 track = track,
                 isLiked = track.uri in likedTrackUris,

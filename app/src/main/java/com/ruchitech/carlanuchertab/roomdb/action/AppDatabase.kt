@@ -6,10 +6,14 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import java.text.SimpleDateFormat
+import java.util.Locale
 import com.ruchitech.carlanuchertab.music.LikedTrackEntity
 import com.ruchitech.carlanuchertab.music.MusicDao
+import com.ruchitech.carlanuchertab.music.MusicPlaybackPrefsEntity
 import com.ruchitech.carlanuchertab.music.MusicSettingsEntity
 import com.ruchitech.carlanuchertab.music.MusicTrackEntity
+import com.ruchitech.carlanuchertab.music.TrackPlayStatsEntity
 import com.ruchitech.carlanuchertab.music.PlaylistEntity
 import com.ruchitech.carlanuchertab.music.PlaylistTrackEntity
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
@@ -53,13 +57,83 @@ abstract class AppDatabase : RoomDatabase() {
         PlaylistEntity::class,
         PlaylistTrackEntity::class,
         LikedTrackEntity::class,
+        MusicPlaybackPrefsEntity::class,
+        TrackPlayStatsEntity::class,
     ],
-    version = 4
+    version = 6
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dashboardDao(): DashboardDao
     abstract fun musicDao(): MusicDao
+}
+
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE fuel_logs ADD COLUMN loggedAtEpochMs INTEGER NOT NULL DEFAULT 0"
+        )
+        val cursor = database.query("SELECT * FROM fuel_logs")
+        val idIdx = cursor.getColumnIndex("id")
+        val dateIdx = cursor.getColumnIndex("date")
+        val timeIdx = cursor.getColumnIndex("time")
+        val sdf = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
+        while (cursor.moveToNext()) {
+            if (idIdx < 0) continue
+            val id = cursor.getInt(idIdx)
+            val dateStr = if (dateIdx >= 0) cursor.getString(dateIdx) else null
+            if (dateStr == null) continue
+            val timeStr = if (timeIdx >= 0) cursor.getString(timeIdx).orEmpty() else ""
+            val ms = try {
+                sdf.parse("$dateStr $timeStr".trim())?.time ?: System.currentTimeMillis()
+            } catch (_: Exception) {
+                System.currentTimeMillis()
+            }
+            database.execSQL("UPDATE fuel_logs SET loggedAtEpochMs = $ms WHERE id = $id")
+        }
+        cursor.close()
+    }
+}
+
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `music_playback_prefs` (
+                `id` INTEGER NOT NULL,
+                `lastTrackUri` TEXT,
+                `lastPositionMs` INTEGER NOT NULL,
+                `shuffleEnabled` INTEGER NOT NULL,
+                `repeatMode` INTEGER NOT NULL,
+                `crossfadeMs` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `track_play_stats` (
+                `trackUri` TEXT NOT NULL,
+                `playCount` INTEGER NOT NULL,
+                `lastPlayedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`trackUri`),
+                FOREIGN KEY(`trackUri`) REFERENCES `music_tracks`(`uri`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_track_play_stats_lastPlayedAt` ON `track_play_stats` (`lastPlayedAt`)"
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_track_play_stats_playCount` ON `track_play_stats` (`playCount`)"
+        )
+        database.execSQL(
+            """
+            INSERT OR IGNORE INTO `music_playback_prefs` (`id`,`lastTrackUri`,`lastPositionMs`,`shuffleEnabled`,`repeatMode`,`crossfadeMs`)
+            VALUES (1,NULL,0,0,0,0)
+            """.trimIndent()
+        )
+    }
 }
 
 private val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -174,7 +248,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "car_launcher_db"
-        ).addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+        ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
     }
 

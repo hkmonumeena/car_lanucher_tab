@@ -6,10 +6,10 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -55,7 +55,48 @@ class MusicViewModel @Inject constructor(
         emptyList()
     )
 
+    val recentlyAddedTracks = repository.recentlyAddedTracksFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList()
+    )
+
+    val recentlyPlayedTracks = repository.recentlyPlayedTracksFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList()
+    )
+
+    val mostPlayedTracks = repository.mostPlayedTracksFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyList()
+    )
+
     val playerState: StateFlow<MusicPlayerUiState> = playerManager.playerState
+
+    private var libraryResumeAttempted: Boolean = false
+
+    init {
+        viewModelScope.launch {
+            combine(
+                repository.tracksFlow,
+                repository.settingsFlow,
+            ) { tracks, settings ->
+                Triple(
+                    tracks,
+                    settings.scanStatus,
+                    !settings.folderUri.isNullOrBlank(),
+                )
+            }.collect { (tracks, scanStatus, folderConfigured) ->
+                if (libraryResumeAttempted) return@collect
+                if (!folderConfigured || scanStatus != MusicScanStatus.READY) return@collect
+                if (tracks.isEmpty()) return@collect
+                libraryResumeAttempted = true
+                playerManager.tryResumeFromLibrary(tracks)
+            }
+        }
+    }
 
     private val _messages = MutableSharedFlow<String>()
     val messages = _messages.asSharedFlow()
@@ -74,10 +115,10 @@ class MusicViewModel @Inject constructor(
         }
     }
 
-    fun albumTracks(album: String, artist: String): StateFlow<List<MusicTrackEntity>> {
-        val key = "$album|$artist"
+    fun albumTracks(album: String): StateFlow<List<MusicTrackEntity>> {
+        val key = album.trim().lowercase()
         return albumTrackFlows.getOrPut(key) {
-            repository.observeAlbumTracks(album, artist).stateIn(
+            repository.observeAlbumTracks(album).stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
                 emptyList()
@@ -175,9 +216,9 @@ class MusicViewModel @Inject constructor(
         }
     }
 
-    fun playAlbum(album: String, artist: String, startTrackUri: String) {
+    fun playAlbum(album: String, startTrackUri: String) {
         viewModelScope.launch {
-            val albumTracks = repository.getAlbumTracks(album, artist)
+            val albumTracks = repository.getAlbumTracks(album)
             playTrackFromList(albumTracks, startTrackUri)
         }
     }
@@ -200,6 +241,24 @@ class MusicViewModel @Inject constructor(
         viewModelScope.launch {
             val liked = repository.getLikedTracks()
             playTrackFromList(liked, startTrackUri)
+        }
+    }
+
+    fun playRecentlyAdded(startTrackUri: String) {
+        viewModelScope.launch {
+            playTrackFromList(recentlyAddedTracks.value, startTrackUri)
+        }
+    }
+
+    fun playRecentlyPlayed(startTrackUri: String) {
+        viewModelScope.launch {
+            playTrackFromList(recentlyPlayedTracks.value, startTrackUri)
+        }
+    }
+
+    fun playMostPlayed(startTrackUri: String) {
+        viewModelScope.launch {
+            playTrackFromList(mostPlayedTracks.value, startTrackUri)
         }
     }
 
@@ -230,6 +289,34 @@ class MusicViewModel @Inject constructor(
 
     fun skipPrevious() {
         playerManager.skipPrevious()
+    }
+
+    fun toggleShuffle() {
+        playerManager.toggleShuffle()
+    }
+
+    fun cycleRepeatMode() {
+        playerManager.cycleRepeatMode()
+    }
+
+    fun setCrossfadeEnabled(enabled: Boolean) {
+        playerManager.setCrossfadeMs(if (enabled) 400 else 0)
+    }
+
+    fun moveQueueItem(from: Int, to: Int) {
+        playerManager.moveQueueItem(from, to)
+    }
+
+    fun removeQueueItem(index: Int) {
+        playerManager.removeQueueItem(index)
+    }
+
+    fun clearQueue() {
+        playerManager.clearQueue()
+    }
+
+    fun playQueueIndex(index: Int) {
+        playerManager.playQueueIndex(index)
     }
 
     fun deleteTrack(trackUri: String) {

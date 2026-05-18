@@ -58,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -102,6 +103,7 @@ import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
 import com.ruchitech.carlanuchertab.helper.wallpapers
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
+import com.ruchitech.carlanuchertab.roomdb.data.FuelQuickFillHints
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogsEntry
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogsList
@@ -233,6 +235,14 @@ fun LauncherHomeScreen(
     viewModel: DashboardViewModel,
 ) {
     val context = LocalContext.current
+    val fuelLogs by viewModel.fuelLogs.collectAsState()
+    val fuelQuickFillHints = remember(fuelLogs) {
+        val last = fuelLogs.firstOrNull()
+        FuelQuickFillHints(
+            lastPricePerLiter = last?.fuelPrice,
+            lastLiters = last?.liters,
+        )
+    }
     var showMenu by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var showFuelLogs by remember { mutableStateOf(false) }
@@ -376,12 +386,14 @@ fun LauncherHomeScreen(
                 })
 
             if (showFuelDialog) {
-                FuelLogDialog(onDismiss = { showFuelDialog = false }, onSubmit = { newLog ->
-                    CoroutineScope(Dispatchers.IO).launch {
-                        viewModel.dashboardDao.insertLog(newLog)
+                FuelLogDialog(
+                    onDismiss = { showFuelDialog = false },
+                    quickFillHints = fuelQuickFillHints,
+                    onSubmit = { newLog ->
+                        viewModel.insertFuelLog(newLog)
                         showFuelDialog = false
-                    }
-                })
+                    },
+                )
             }
 
             if (showWallpaperSheet) {
@@ -547,12 +559,15 @@ fun LauncherHomeScreen(
                 modifier = Modifier.align(alignment = Alignment.TopCenter),
                 contentAlignment = Alignment.CenterStart
             ) {
-                FuelLogs(onClose = {
-                    showFuelLogs = false
-                }, onAddNew = {
-                    showFuelLogs = false
-                    showFuelDialog = true
-                }, viewModel, onDelete = {})
+                FuelLogs(
+                    fuelLogs = fuelLogs,
+                    onClose = { showFuelLogs = false },
+                    onAddNew = {
+                        showFuelLogs = false
+                        showFuelDialog = true
+                    },
+                    onDelete = { viewModel.deleteFuelLog(it) },
+                )
             }
         }
     }
@@ -710,9 +725,9 @@ private fun DraggableWidget(
 
 @Composable
 fun FuelLogs(
+    fuelLogs: List<FuelLog>,
     onClose: () -> Unit,
     onAddNew: () -> Unit,
-    viewModel: DashboardViewModel,
     onDelete: (fuelLog: FuelLog) -> Unit,
 ) {
     Box(
@@ -721,14 +736,12 @@ fun FuelLogs(
             .padding(horizontal = 120.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Background dimming
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Transparent)
                 .clickable { onClose() })
 
-        // Main card
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.8f)
@@ -741,35 +754,12 @@ fun FuelLogs(
                 containerColor = Color(0xFF1E1E1E), contentColor = Color.White
             )
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                val isLoading = remember { mutableStateOf(true) }
-                val fuelLogs = remember { mutableStateListOf<FuelLog>() }
-
-                LaunchedEffect(Unit) {
-                    val logs = viewModel.dashboardDao.getAllLogs()
-                    fuelLogs.addAll(logs)
-                    isLoading.value = false
-                }
-
-                if (isLoading.value) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF5D8BF4),
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(48.dp)
-                        )
-                    }
-                } else {
-                    FuelLogsList(
-                        fuelLogs = fuelLogs,
-                        onClose = onClose,
-                        onAddNew = onAddNew,
-                        onDelete = onDelete
-                    )
-                }
-            }
+            FuelLogsList(
+                fuelLogs = fuelLogs,
+                onClose = onClose,
+                onAddNew = onAddNew,
+                onDelete = onDelete,
+            )
         }
     }
 }

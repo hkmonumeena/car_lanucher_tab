@@ -3,6 +3,7 @@ package com.ruchitech.carlanuchertab.roomdb.dao
 import androidx.room.*
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DashboardDao {
@@ -28,9 +29,12 @@ interface DashboardDao {
 
 
 
-    // 🔍 Read All
-    @Query("SELECT * FROM fuel_logs ORDER BY id DESC")
+    // 🔍 Read All (newest first by wall-clock instant, then id)
+    @Query("SELECT * FROM fuel_logs ORDER BY loggedAtEpochMs DESC, id DESC")
     suspend fun getAllLogs(): List<FuelLog>
+
+    @Query("SELECT * FROM fuel_logs ORDER BY loggedAtEpochMs DESC, id DESC")
+    fun observeFuelLogs(): Flow<List<FuelLog>>
 
     // 🔍 Read by ID
     @Query("SELECT * FROM fuel_logs WHERE id = :id")

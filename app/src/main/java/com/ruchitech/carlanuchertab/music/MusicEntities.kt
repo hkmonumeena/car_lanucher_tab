@@ -147,6 +147,41 @@ data class PlaylistTrackWithSong(
     val playlistPosition: Int,
 )
 
+@Entity(tableName = "music_playback_prefs")
+data class MusicPlaybackPrefsEntity(
+    @PrimaryKey(autoGenerate = false)
+    val id: Int = 1,
+    val lastTrackUri: String? = null,
+    val lastPositionMs: Long = 0L,
+    val shuffleEnabled: Boolean = false,
+    /** Same values as [androidx.media3.common.Player] repeat modes: OFF=0, ONE=1, ALL=2 */
+    val repeatMode: Int = 0,
+    /** 0 = disabled; fade-in duration (ms) after each track change. */
+    val crossfadeMs: Int = 0,
+)
+
+@Entity(
+    tableName = "track_play_stats",
+    indices = [
+        Index(value = ["lastPlayedAt"]),
+        Index(value = ["playCount"]),
+    ],
+    foreignKeys = [
+        ForeignKey(
+            entity = MusicTrackEntity::class,
+            parentColumns = ["uri"],
+            childColumns = ["trackUri"],
+            onDelete = ForeignKey.CASCADE
+        ),
+    ],
+)
+data class TrackPlayStatsEntity(
+    @PrimaryKey
+    val trackUri: String,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long = 0L,
+)
+
 data class MusicPlayerUiState(
     val currentTrack: MusicTrackEntity? = null,
     val currentQueue: List<MusicTrackEntity> = emptyList(),
@@ -156,4 +191,7 @@ data class MusicPlayerUiState(
     val durationMs: Long = 0L,
     val hasNext: Boolean = false,
     val hasPrevious: Boolean = false,
+    val shuffleEnabled: Boolean = false,
+    val repeatMode: Int = 0,
+    val crossfadeMs: Int = 0,
 )

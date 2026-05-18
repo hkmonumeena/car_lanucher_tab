@@ -46,10 +46,16 @@ fun createFuelLogEntry(
     fuelPriceInput: Float?,
     litersInput: Float?,
     location: String? = null,
+    loggedAtEpochMs: Long = System.currentTimeMillis(),
 ): FuelLog? {
+    if (fuelPriceInput != null && fuelPriceInput <= 0f) return null
+    if (litersInput != null && litersInput <= 0f) return null
+
     var rupee = rupeeInput
     var liters = litersInput
     var price = fuelPriceInput
+
+    fun roundTwo(v: Float): Float = kotlin.math.round(v * 100f) / 100f
 
     when {
         // Case 1: Calculate liters
@@ -59,23 +65,29 @@ fun createFuelLogEntry(
 
         // Case 2: Calculate rupees
         liters != null && price != null && rupee == null -> {
-            rupee = (liters * price).toInt()
+            rupee = kotlin.math.round(liters * price).toInt()
         }
 
-        // ✅ Case 3: Calculate price
+        // Case 3: Calculate price
         liters != null && rupee != null && price == null -> {
             price = rupee / liters
         }
 
-        // ❌ Case 4: Invalid if rupee is completely missing
         rupee == null -> return null
     }
+
+    if (price != null && price <= 0f) return null
+    if (liters != null && liters <= 0f) return null
+
+    liters = liters?.let(::roundTwo)
+    price = price?.let(::roundTwo)
 
     return FuelLog(
         rupee = rupee ?: 0,
         liters = liters,
         fuelPrice = price,
-        location = location
+        location = location,
+        loggedAtEpochMs = loggedAtEpochMs,
     )
 }
 

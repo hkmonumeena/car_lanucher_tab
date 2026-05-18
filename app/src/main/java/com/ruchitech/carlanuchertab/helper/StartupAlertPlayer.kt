@@ -29,24 +29,41 @@ object StartupAlertPlayer {
         val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val bootCount = readBootCount(appContext)
         val lastEnqueuedBootCount = prefs.getInt(KEY_LAST_ENQUEUED_BOOT_COUNT, -1)
+        val lastEnqueuedTimestamp = prefs.getLong(KEY_LAST_ENQUEUED_TIMESTAMP, 0L)
+        val now = System.currentTimeMillis()
 
-        if (bootCount >= 0 && bootCount <= lastEnqueuedBootCount) {
-            return
-        }
+        Log.d(TAG, "scheduleIfNeeded called: bootCount=$bootCount, lastEnqueuedBootCount=$lastEnqueuedBootCount, lastEnqueuedTimestamp=$lastEnqueuedTimestamp, now=$now")
 
-        if (bootCount < 0) {
-            val now = System.currentTimeMillis()
-            val lastEnqueuedTimestamp = prefs.getLong(KEY_LAST_ENQUEUED_TIMESTAMP, 0L)
-            if (now - lastEnqueuedTimestamp < 60_000L) {
+        val timeDiff = now - lastEnqueuedTimestamp
+        val throttleDuration = 5 * 60_000L // 5 minutes in milliseconds
+
+        // If boot count is valid (>= 0), check if it's the same boot AND within the throttle period
+        if (bootCount >= 0) {
+            if (bootCount <= lastEnqueuedBootCount && timeDiff < throttleDuration) {
+                val remainingSeconds = (throttleDuration - timeDiff) / 1000
+                Log.d(TAG, "Throttling: Same boot ($bootCount) and recently enqueued. Skipping scheduling. Try again in $remainingSeconds seconds.")
                 return
             }
-            prefs.edit().putLong(KEY_LAST_ENQUEUED_TIMESTAMP, now).apply()
-        } else {
+            // Update the boot count and timestamp
             prefs.edit()
                 .putInt(KEY_LAST_ENQUEUED_BOOT_COUNT, bootCount)
-                .putLong(KEY_LAST_ENQUEUED_TIMESTAMP, System.currentTimeMillis())
+                .putLong(KEY_LAST_ENQUEUED_TIMESTAMP, now)
                 .apply()
+            Log.d(TAG, "Updating prefs for boot: bootCount=$bootCount, timestamp=$now")
+        } else {
+            // Fallback for when boot count is unavailable
+            if (timeDiff < throttleDuration) {
+                val remainingSeconds = (throttleDuration - timeDiff) / 1000
+                Log.d(TAG, "Throttling: Boot count unavailable, but enqueued recently. Skipping scheduling. Try again in $remainingSeconds seconds.")
+                return
+            }
+            prefs.edit()
+                .putLong(KEY_LAST_ENQUEUED_TIMESTAMP, now)
+                .apply()
+            Log.d(TAG, "Updating prefs for timestamp fallback: timestamp=$now")
         }
+
+        Log.d(TAG, "Enqueuing StartupAlertWorker with delay of $STARTUP_DELAY_SECONDS seconds.")
 
         val request = OneTimeWorkRequestBuilder<StartupAlertWorker>()
             .setInitialDelay(STARTUP_DELAY_SECONDS, TimeUnit.SECONDS)
@@ -61,26 +78,30 @@ object StartupAlertPlayer {
 
     suspend fun playNow(context: Context): Boolean {
         val appContext = context.applicationContext
+        Log.i(TAG, "playNow: Attempting to play startup alert audio. Maximizing volume.")
         maximizeVolume(appContext)
 
         return suspendCancellableCoroutine { continuation ->
             Handler(Looper.getMainLooper()).post {
                 try {
+                    Log.d(TAG, "playNow: Creating MediaPlayer for alert resource.")
                     val player = MediaPlayer.create(appContext, R.raw.alert)
                     if (player == null) {
+                        Log.e(TAG, "playNow: MediaPlayer.create returned null. Alert audio resource R.raw.alert might be missing or corrupted.")
                         continuation.resume(false)
                         return@post
                     }
 
                     player.setVolume(1f, 1f)
                     player.setOnCompletionListener {
+                        Log.i(TAG, "playNow: Alert audio playback completed successfully.")
                         it.release()
                         if (continuation.isActive) {
                             continuation.resume(true)
                         }
                     }
                     player.setOnErrorListener { mp, what, extra ->
-                        Log.e(TAG, "Alert playback failed: what=$what extra=$extra")
+                        Log.e(TAG, "playNow: Alert playback failed: what=$what extra=$extra")
                         mp.release()
                         if (continuation.isActive) {
                             continuation.resume(false)
@@ -88,11 +109,13 @@ object StartupAlertPlayer {
                         true
                     }
                     continuation.invokeOnCancellation {
+                        Log.d(TAG, "playNow: Job cancelled, releasing MediaPlayer.")
                         player.release()
                     }
+                    Log.d(TAG, "playNow: Starting playback.")
                     player.start()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Unable to play startup alert", e)
+                    Log.e(TAG, "playNow: Exception occurred while playing startup alert", e)
                     if (continuation.isActive) {
                         continuation.resume(false)
                     }
