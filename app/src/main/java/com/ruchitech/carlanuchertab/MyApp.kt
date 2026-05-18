@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.ruchitech.carlanuchertab.helper.StartupAlertPlayer
 import com.ruchitech.carlanuchertab.ui.screens.apps.AppInfo
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +18,7 @@ class MyApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        StartupAlertPlayer.scheduleIfNeeded(this)
         CoroutineScope(Dispatchers.IO).launch {
             loadInstalledApps()
         }

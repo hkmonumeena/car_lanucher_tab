@@ -19,7 +19,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -75,12 +75,15 @@ dependencies {
     implementation(libs.androidx.palette.ktx)
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
     implementation ("androidx.hilt:hilt-work:1.0.0")
-    kapt("com.google.dagger:hilt-compiler:2.55")
-    implementation("com.google.dagger:hilt-android:2.55")
+    kapt("com.google.dagger:hilt-compiler:2.57.2")
+    implementation("com.google.dagger:hilt-android:2.57.2")
     implementation("androidx.work:work-runtime:2.10.2")
     implementation(libs.androidx.material3.window.size.class1)
     implementation(libs.androidx.material3.adaptive.navigation.suite)
     implementation("androidx.navigation:navigation-compose:2.9.1")
+    implementation("androidx.documentfile:documentfile:1.1.0")
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-session:1.4.1")
 
 }
 // Add this to enable annotation processing with Hilt

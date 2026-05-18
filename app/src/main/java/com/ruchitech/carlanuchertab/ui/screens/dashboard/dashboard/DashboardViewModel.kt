@@ -17,12 +17,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ruchitech.carlanuchertab.ClickedViewBus
 import com.ruchitech.carlanuchertab.WidgetItem
 import com.ruchitech.carlanuchertab.helper.VoiceCommandHelper
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
-import com.ruchitech.carlanuchertab.helper.enableAccessibilityService
-import com.ruchitech.carlanuchertab.helper.isAccessibilityEnabled
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
@@ -35,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.io.OutputStream
 import java.util.UUID
 import javax.inject.Inject
 
@@ -65,7 +63,7 @@ class DashboardViewModel @Inject constructor(
     private val _pairedDevices = mutableStateListOf<BluetoothDevice>()
     val pairedDevices: List<BluetoothDevice> = _pairedDevices
 
-    private val uuid = UUID.fromString("8ce255c0-200a-11e0-ac64-0800200c9a66")
+    private val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     private val _nowPlaying = MutableStateFlow<MusicoletNowPlaying?>(null)
     val nowPlaying: StateFlow<MusicoletNowPlaying?> = _nowPlaying
 
@@ -78,12 +76,14 @@ class DashboardViewModel @Inject constructor(
     private val _uiState = mutableStateOf(DashboardUiState())
     val uiState: State<DashboardUiState> = _uiState
 
+    private val TAG = "TabbedViewModel"
     private var serverSocket: BluetoothServerSocket? = null
+    private var output: OutputStream? = null
 
-    fun startReceiverServer() {
+   /* fun startReceiverServer() {
         viewModelScope.launch(Dispatchers.IO) {
+            disconnect()
             try {
-
                 serverSocket = bluetoothAdapter?.listenUsingRfcommWithServiceRecord(
                     "MyBTServer", uuid
                 )
@@ -91,7 +91,7 @@ class DashboardViewModel @Inject constructor(
 
                 socket?.let {
                     val input = it.inputStream
-                    val output = it.outputStream
+                     output = it.outputStream
                     val buffer = ByteArray(1024)
                     while (true) {
                         val bytes = input.read(buffer)
@@ -99,16 +99,19 @@ class DashboardViewModel @Inject constructor(
                         Log.d("fghufiughfignf", "Received: $received")
                         handleInput(received)
                         val response = "Echo: $received"
-                        output.write(response.toByteArray())
+                        output?.write(response.toByteArray())
                     }
                 }
             } catch (e: IOException) {
                 Log.e("BluetoothServer", "Error: ${e.message}")
             }
         }
-    }
+    }*/
+
+
 
     init {
+        Log.d(TAG, "ViewModel created")
         initData()
         viewModelScope.launch {
             loadPairedDevices()
@@ -137,18 +140,66 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun sendCommand(cmd: String) {
-        bluetoothManager.send(cmd)
+        //  bluetoothManager.send(cmd)
+        serverSocket?.let {
+            try {
+                output?.write(cmd.toByteArray())
+            } catch (e: IOException) {
+                Log.e("BT_Manager", "Send failed: ${e.message}")
+            }
+        }
     }
 
-    fun handleInput(command: String){
-        when(command){
-            "play/pause" -> playPause()
-            "openFuelLog" ->{
+    fun handleInput(command: String) {
+        when (command) {
+            "play/pause" -> {
+                var mediaId = "musicolet.media.r.7.s_28"
+                _musicoletController.value?.let { controller ->
+                    val playbackState = controller.playbackState
+                    val isPlaying = playbackState?.state == PlaybackState.STATE_PLAYING
+
+                    if (mediaId != null) {
+                        // Check if supported
+                        val supportsPlayFromMediaId =
+                            playbackState?.actions?.and(PlaybackState.ACTION_PLAY_FROM_MEDIA_ID) != 0L
+
+                        if (supportsPlayFromMediaId) {
+                            Log.d("PlayPause", "Trying to play mediaId: $mediaId")
+                            controller.transportControls.playFromMediaId(mediaId, null)
+                        } else {
+                            Log.w("PlayPause", "playFromMediaId not supported")
+                        }
+                    } else {
+                        // Toggle play/pause
+                        if (isPlaying) {
+                            controller.transportControls.pause()
+                        } else {
+                            controller.transportControls.play()
+                        }
+                    }
+                }
+            }
+
+            "openFuelLog" -> {
                 showFuelLogsModal()
             }
-            "connected" ->{
+
+            "snow" -> {
+                _uiState.value = _uiState.value.copy(isSnowfall = !_uiState.value.isSnowfall)
+            }
+
+            "music" -> {
+                sendCommand("hello I am returned from server")
+            }
+
+            "connected" -> {
                 val current = _uiState.value
                 _uiState.value = current.copy(serverStarted = true)
+            }
+
+            "disconnected" -> {
+                val current = _uiState.value
+                _uiState.value = current.copy(serverStarted = false)
             }
         }
     }
@@ -175,7 +226,14 @@ class DashboardViewModel @Inject constructor(
 
     fun updateNowPlayingInfo() {
         musicoletController.value?.let { controller ->
-            Log.e("fdjgbguifdgbkufdn", "updateNowPlayingInfo: ${controller}")
+            Log.e(
+                "gfdgdfgdfgdfgdf",
+                "updateNowPlayingInfo: ${controller.metadata?.description?.mediaUri}"
+            )
+            Log.e(
+                "gfdgdfgdfgdfgdf",
+                "updateNowPlayingInfo:22 ${controller.metadata?.description?.mediaId}"
+            )
             val metadata = controller.metadata
             val state = controller.playbackState
             val info = MusicoletNowPlaying(
@@ -393,8 +451,27 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun setWallpaper(wallpaperId: Int) {
-        _uiState.value = _uiState.value.copy(wallpaperId = wallpaperId)
-        saveWidgetItems(_uiState.value.widgetItems)
+        viewModelScope.launch {
+            val dashboard = dashboardDao.getDashboard()
+            if (dashboard != null) {
+                dashboardDao.updateDashboard(
+                    dashboard.copy(
+                        wallpaperId = wallpaperId,
+                    )
+                )
+            }
+        }
+
+        val current = _uiState.value
+        Log.e("gfdiohgufohgjfd", "setWallpaper: $wallpaperId")
+        _uiState.value = current.copy(wallpaperId = wallpaperId)
+    }
+
+        fun refreshWallpaper() {
+            val current = _uiState.value
+            Log.e("gfdghdfgdfgdfgdf", "setWallpaper: ")
+            _uiState.value = current.copy(wallpaperId = current.wallpaperId)
+        //saveWidgetItems(_uiState.value.widgetItems)
     }
 
     fun toggleEditMode() {
@@ -450,11 +527,7 @@ class DashboardViewModel @Inject constructor(
             WidgetMenuAction.Fuels -> TODO()
             WidgetMenuAction.RemoveAllWidgets -> clearWidgets()
             WidgetMenuAction.Snowfall -> {
-                if (!isAccessibilityEnabled(context)) {
-                    enableAccessibilityService(context)
-                } else {
-                    _uiState.value = _uiState.value.copy(isSnowfall = !_uiState.value.isSnowfall)
-                }
+                _uiState.value = _uiState.value.copy(isSnowfall = !_uiState.value.isSnowfall)
             }
 
             WidgetMenuAction.Wallpapers -> {
@@ -478,7 +551,7 @@ class DashboardViewModel @Inject constructor(
                 if (current.serverStarted) {
                     disconnect()
                 } else {
-                    startReceiverServer()
+                  //  startReceiverServer()
                 }
             }
         }

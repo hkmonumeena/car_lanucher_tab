@@ -1,5 +1,7 @@
 package com.ruchitech.carlanuchertab.ui.screens.apps
 
+import android.R.attr.maxHeight
+import android.R.attr.maxWidth
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
@@ -95,6 +97,12 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
         Color(0xFF02070D)
     )
 
+    val gradientBrush = Brush.linearGradient(
+        colors = gradientColors,
+        start = Offset(0f, 0f),
+        end = Offset(maxWidth.toFloat(), maxHeight.toFloat()) // Use constraint size
+    )
+
     val filteredApps by remember(searchQuery.value, allApps.value) {
         derivedStateOf {
             if (searchQuery.value.isBlank()) allApps.value
@@ -106,7 +114,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
 
     Box(modifier = modifier.fillMaxSize()) {
         // Premium Car Dashboard Background
-        Canvas(modifier = Modifier.fillMaxSize()) {
+/*        Canvas(modifier = Modifier.fillMaxSize()) {
             drawRect(
                 brush = Brush.linearGradient(
                     colors = gradientColors,
@@ -124,12 +132,15 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                     strokeWidth = 1.dp.toPx()
                 )
             }
-        }
+        }*/
 
         // Dashboard Content
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(
+                    brush = gradientBrush
+                    )
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -258,11 +269,11 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
             } else {
                 // Premium App Grid with 3D Effect
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(100.dp),
+                    columns = GridCells.Adaptive(120.dp),
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(bottom = 32.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                    horizontalArrangement = Arrangement.spacedBy(60.dp),
+                    verticalArrangement = Arrangement.spacedBy(30.dp)
                 ) {
                     items(filteredApps) { app ->
                         AppGridItemPremium(app = app)
@@ -277,13 +288,6 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                 .fillMaxWidth()
                 .height(48.dp)
                 .padding(top = 20.dp)
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = gradientColors,
-                        start = Offset(0f, 0f),
-                        //end = Offset(size.width, size.height)
-                    )
-                )
         ) {
             Row(
                 modifier = Modifier
@@ -320,18 +324,18 @@ fun AppGridItemPremium(app: AppInfo) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .width(100.dp)
-            .height(120.dp)
+            .fillMaxWidth()
+            .height(160.dp)
     ) {
         Box(
-            modifier = Modifier
-                .graphicsLayer {
+            modifier = Modifier.fillMaxWidth()
+                /*       .graphicsLayer {
                     rotationY = if (isPressed) 5f else 0f
                     rotationX = if (isPressed) -2f else 0f
                     scaleX = if (isPressed) 0.95f else 1f
                     scaleY = if (isPressed) 0.95f else 1f
-                }
-                .shadow(
+                }*/
+              /*  .shadow(
                     elevation = elevation.value,
                     shape = RoundedCornerShape(20.dp),
                     clip = true,
@@ -341,11 +345,11 @@ fun AppGridItemPremium(app: AppInfo) {
                 .background(
                     color = if (isPressed) Color(0xFF2A3D52) else Color(0xFF1A2E42),
                     shape = RoundedCornerShape(20.dp)
-                )
+                )*/
                 .border(
                     width = 1.dp,
                     color = Color(0xFF3A5A78).copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(24.dp)
                 )
                 .clickable(
                     onClick = {
@@ -363,17 +367,17 @@ fun AppGridItemPremium(app: AppInfo) {
             ) {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .shadow(
+                        .size(100.dp)
+                        /*      .shadow(
                             elevation = 4.dp,
                             shape = RoundedCornerShape(14.dp),
                             clip = true,
                             ambientColor = Color(0xFF3A5A78),
                             spotColor = Color(0xFF102A3F)
-                        )
+                        )*/
                         .background(
                             color = Color(0xFF2A3D52),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = RoundedCornerShape(24.dp)
                         )
                 ) {
                     Icon(
@@ -381,22 +385,22 @@ fun AppGridItemPremium(app: AppInfo) {
                         contentDescription = app.name,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(14.dp))
-                            .padding(4.dp),
+                            .clip(RoundedCornerShape(24.dp))
+                            .padding(0.dp),
                         tint = Color.Unspecified
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = app.packageName,
-                    style = MaterialTheme.typography.labelMedium,
+                    text = app.name,
+                    style = MaterialTheme.typography.labelLarge,
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.width(80.dp)
+                    modifier = Modifier.width(150.dp)
                 )
             }
         }

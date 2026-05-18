@@ -13,11 +13,11 @@ sealed class NavItem(
     object Fuel : NavItem(R.drawable.fuel_add, "Fuel")
     object Settings : NavItem(R.drawable.my_settings, "Settings")
     object AllApps : NavItem(R.drawable.apps, "All Apps")
-    object Client : NavItem(R.drawable.apps, "Client")
-    object Server : NavItem(R.drawable.apps, "Server")
+  /*  object Client : NavItem(R.drawable.apps, "Client")
+    object Server : NavItem(R.drawable.apps, "Server")*/
 
     companion object {
-        val allItems = listOf(Radio, Music, Fuel, Settings, Client, Server)
+        val allItems = listOf(Radio, Music, Fuel, Settings, AllApps)
     }
 }
 

@@ -82,12 +82,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.registerReceiver
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.idapgroup.snowfall.snowfall
 import com.ruchitech.carlanuchertab.ClickedViewPrefs
 import com.ruchitech.carlanuchertab.R
@@ -96,6 +98,7 @@ import com.ruchitech.carlanuchertab.clock.ShowAnalogClock
 import com.ruchitech.carlanuchertab.helper.MusicNotificationListener
 import com.ruchitech.carlanuchertab.helper.NavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
+import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
 import com.ruchitech.carlanuchertab.rememberVehicleLocationState
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
@@ -290,6 +293,7 @@ fun HomeScreen(
     val locationState = rememberVehicleLocationState()
     var deleteDialog by remember { mutableStateOf(false) }
     var itemToDelete: FuelLog? by remember { mutableStateOf(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
     //val kmhSpeed = speed * 3.6f // Convert m/s to km/h
     //var currentSpeed by remember { mutableStateOf(locationState.speed * 3.6f) } // Default dummy value
     val configureLauncher = rememberLauncherForActivityResult(
@@ -306,6 +310,8 @@ fun HomeScreen(
             }
         }
     }
+
+
 
     val pickWidgetLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -335,97 +341,11 @@ fun HomeScreen(
 
     DisposableEffect(Unit) {
         appWidgetHost.startListening()
-        val mediaSessionManager =
-            context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-        val componentName = ComponentName(context, MusicNotificationListener::class.java)
-
-        // Create the listener as a separate variable so we can properly remove it
-        val sessionListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
-            Log.d("MediaSession", "🟢 Session changed: ${controllers?.map { it.packageName }}")
-            controllers?.firstOrNull { it.packageName == "in.krosbits.musicolet" }
-                ?.let { viewModel.updateMusicoletController(it) }
-        }
-
-        // Register the listener with a handler
-        mediaSessionManager.addOnActiveSessionsChangedListener(
-            sessionListener, componentName, Handler(Looper.getMainLooper()) // Explicit handler
-        )
-
-        // Get initial sessions (with try-catch for security exception)
-        val currentSessions = try {
-            mediaSessionManager.getActiveSessions(componentName)
-        } catch (e: SecurityException) {
-            Log.w("MediaSession", "Permission denied for getActiveSessions", e)
-            emptyList()
-        }
-
-        Log.d("MediaSession", "🔵 Current sessions: ${currentSessions.map { it.packageName }}")
-        currentSessions.firstOrNull { it.packageName == "in.krosbits.musicolet" }
-            ?.let { viewModel.updateMusicoletController(it) }
-
         onDispose {
             appWidgetHost.stopListening()
-            mediaSessionManager.removeOnActiveSessionsChangedListener(sessionListener)
         }
     }
-    NowPlayingObserver(viewModel)
-    if (uiState.showPairedDevices) {
-        Dialog(onDismissRequest = {
-            viewModel.hidePairedDevicesModal()
-        }) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
-            ) {
-                Column {
-                    // Header with title and close button
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Available Devices",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        IconButton(onClick = { viewModel.hidePairedDevicesModal() }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close"
-                            )
-                        }
-                    }
 
-                    Divider()
-
-                    // Devices list
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 400.dp)
-                    ) {
-                        items(viewModel.pairedDevices) { device ->
-                            Text(
-                                text = "${device.name} (${device.address})",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.connect(device)
-                                        viewModel.hidePairedDevicesModal()
-                                    }
-                                    .padding(16.dp)
-                            )
-                            Divider()
-                        }
-                    }
-                }
-            }
-        }
-    }
     Scaffold { padding ->
         Box(
             modifier = Modifier
@@ -437,15 +357,13 @@ fun HomeScreen(
                     else Modifier
                 )
         ) {
-            // 🎨 Wallpaper background from resource
-            if (uiState.wallpaperId != 0) {
-                Image(
-                    painter = painterResource(id = R.drawable.launcher_bg10),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.FillBounds
-                )
-            }
+            // Ã°Å¸Å½Â¨ Wallpaper background from resource
+            Image(
+                painter = painterResource(id = uiState.wallpaperId),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.FillBounds
+            )
 
             if (uiState.addFuelLog) {
                 FuelLogDialog(
@@ -507,7 +425,7 @@ fun HomeScreen(
 
                 Box(
                     modifier = Modifier
-                        .weight(1.5F)
+                        .weight(1.25F)
                         .fillMaxSize()
                 ) {
                     Box(
@@ -548,7 +466,7 @@ fun HomeScreen(
                         HomeBottomIcons(onClick = { bottomNavItem ->
                             when (bottomNavItem) {
                                 NavItem.AllApps -> {
-
+                                    onNavigated(bottomNavItem)
                                 }
 
                                 NavItem.Fuel -> {
@@ -557,16 +475,7 @@ fun HomeScreen(
 
                                 NavItem.Map -> {}
                                 NavItem.Music -> {
-                                    val packageName = "in.krosbits.musicolet"
-                                    val launchIntent =
-                                        context.packageManager.getLaunchIntentForPackage(packageName)
-                                    if (launchIntent != null) {
-                                        context.startActivity(launchIntent)
-                                    } else {
-                                        Toast.makeText(
-                                            context, "App not installed", Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
+                                    onNavigated(bottomNavItem)
                                 }
 
                                 NavItem.Radio -> {
@@ -576,7 +485,7 @@ fun HomeScreen(
                                     if (launchIntent != null) {
                                         context.startActivity(launchIntent)
                                     } else {
-                                        onNavigated(bottomNavItem)
+                                        // onNavigated(bottomNavItem)
                                         Toast.makeText(
                                             context, "App not installed", Toast.LENGTH_SHORT
                                         ).show()
@@ -587,13 +496,13 @@ fun HomeScreen(
                                     viewModel.toggleSettings()
                                 }
 
-                                NavItem.Client -> {
-                                    onNavigated(bottomNavItem)
-                                }
+                                /*           NavItem.Client -> {
+                                               onNavigated(bottomNavItem)
+                                           }
 
-                                NavItem.Server -> {
-                                    onNavigated(bottomNavItem)
-                                }
+                                           NavItem.Server -> {
+                                               onNavigated(bottomNavItem)
+                                           }*/
                             }
                         })
 
@@ -607,19 +516,21 @@ fun HomeScreen(
 
                     if (uiState.serverStarted) {
                         Image(
-                            modifier = Modifier.padding(10.dp).size(25.dp),
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .size(25.dp),
                             painter = painterResource(R.drawable.connected),
                             contentDescription = null
                         )
                     }
 
-               /*     Text(
-                        text = "${(locationState.speed * 3.6f).toInt()} km/h",
-                        color = Color.White,
-                        fontSize = 32.sp,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(top = 10.dp)
-                    )*/
+                    /*     Text(
+                             text = "${(locationState.speed * 3.6f).toInt()} km/h",
+                             color = Color.White,
+                             fontSize = 32.sp,
+                             style = MaterialTheme.typography.titleLarge,
+                             modifier = Modifier.padding(top = 10.dp)
+                         )*/
                 }
 
                 Box(
@@ -627,7 +538,7 @@ fun HomeScreen(
                         .weight(1F)
                         .fillMaxSize()
                 ) {
-                    MusicUi(viewModel)
+                    MusicUi(onOpenLibrary = { onNavigated(NavItem.Music) })
                 }/*                Box(
                                     modifier = Modifier.fillMaxSize(),
                                 ) {
@@ -747,17 +658,17 @@ private fun DraggableWidget(
 ) {
     val context = LocalContext.current
 
-    // 🔄 Track offset locally for immediate drag feedback
+    // Ã°Å¸â€â€ž Track offset locally for immediate drag feedback
     var offsetX by remember(item.appWidgetId) { mutableFloatStateOf(item.x) }
     var offsetY by remember(item.appWidgetId) { mutableFloatStateOf(item.y) }
 
-    // 🧠 Sync offset when item is updated externally (e.g. from ViewModel)
+    // Ã°Å¸Â§Â  Sync offset when item is updated externally (e.g. from ViewModel)
     LaunchedEffect(item.x, item.y) {
         offsetX = item.x
         offsetY = item.y
     }
 
-    // 🔄 Track size locally for resize responsiveness
+    // Ã°Å¸â€â€ž Track size locally for resize responsiveness
     var widgetWidth by remember(item.appWidgetId) { mutableIntStateOf(item.width) }
     var widgetHeight by remember(item.appWidgetId) { mutableIntStateOf(item.height) }
 
@@ -872,7 +783,7 @@ fun NowPlayingObserver(viewModel: DashboardViewModel) {
             )
 
         } catch (e: Exception) {
-            Log.e("fkgidbidfijgk", "❌ Failed to register music receiver: $e")
+            Log.e("fkgidbidfijgk", "Ã¢ÂÅ’ Failed to register music receiver: $e")
         }
 
         onDispose {
@@ -894,11 +805,11 @@ fun NowPlayingInfo(viewModel: DashboardViewModel = hiltViewModel()) {
                     modifier = Modifier.size(200.dp)
                 )
             }
-            Text("🎵 ${info.title ?: "Unknown"}", fontWeight = FontWeight.Bold)
-            Text("👤 ${info.artist ?: "Unknown"}")
-            Text("💿 ${info.album ?: "Unknown"}")
-            Text("⏱ ${info.position / 1000}s / ${info.duration / 1000}s")
-            Text("▶️ Playing: ${info.isPlaying}")
+            Text("Ã°Å¸Å½Âµ ${info.title ?: "Unknown"}", fontWeight = FontWeight.Bold)
+            Text("Ã°Å¸â€˜Â¤ ${info.artist ?: "Unknown"}")
+            Text("Ã°Å¸â€™Â¿ ${info.album ?: "Unknown"}")
+            Text("Ã¢ÂÂ± ${info.position / 1000}s / ${info.duration / 1000}s")
+            Text("Ã¢â€“Â¶Ã¯Â¸Â Playing: ${info.isPlaying}")
         }
     }
 }

@@ -537,8 +537,6 @@ fun LauncherHomeScreen(
                     }
 
                     NavItem.Settings -> TODO()
-                    NavItem.Client -> TODO()
-                    NavItem.Server -> TODO()
                 }
 
             })

@@ -1,6 +1,7 @@
 package com.ruchitech.carlanuchertab
 
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -19,12 +20,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
-import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
-import com.ruchitech.carlanuchertab.helper.openNotificationAccessSettings
+import com.ruchitech.carlanuchertab.helper.enableAccessibilityService
 import com.ruchitech.carlanuchertab.ui.navigationstack.NavigationGraph
 import com.ruchitech.carlanuchertab.ui.navigationstack.Screen
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 
 
 data class WidgetItem(
@@ -38,6 +41,8 @@ data class WidgetItem(
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val navigationRequests = MutableSharedFlow<Screen>(extraBufferCapacity = 1)
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,35 +50,45 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = resources.getColor(R.color.transparent)
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
-        if (!isNotificationListenerEnabled(this)) {
-            openNotificationAccessSettings(this)
-            return
-        }
 
         setContent {
             val navController = rememberNavController()
+            LaunchedEffect(Unit) {
+                navigationRequests.collect { screen ->
+                    when (screen) {
+                        Screen.Home -> {
+                            navController.navigate(Screen.Home) {
+                                popUpTo(0) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+
+                        Screen.Apps -> {
+                            navController.navigate(Screen.Apps) {
+                                launchSingleTop = true
+                            }
+                        }
+
+                        else -> Unit
+                    }
+                }
+            }
+
             LaunchedEffect(Unit) {
                 ClickedViewBus.clickedViews.collect { viewId ->
                     Log.e("ihbygyigbiyh", "onCreate: $viewId")
                     when (viewId) {
                         "com.android.systemui:id/home" -> {
-                            navController.navigate(Screen.Home) {
-                                popUpTo(0) { inclusive = true } // Clears the entire back stack
-                                launchSingleTop =
-                                    true          // Prevents multiple copies of the destination
-                            }
+                            requestNavigation(Screen.Home)
                         }
 
                         "com.android.systemui:id/apps" -> {
-                            navController.navigate(Screen.Apps) {
-                                launchSingleTop =
-                                    true          // Prevents multiple copies of the destination
-                            }
+                            requestNavigation(Screen.Apps)
                         }
 
                         "openAccessibilitySettings" -> {
                             Log.e("gfjgbifbgkfjgfg", "onCreate: $viewId")
-                          //  openNotificationAccessSettings(this@MainActivity)
+                            enableAccessibilityService(this@MainActivity)
                         }
 
                     }
@@ -89,9 +104,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleLauncherIntent(intent)
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemUI()
+    }
+
+    private fun handleLauncherIntent(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_MAIN) return
+        val categories = intent.categories ?: return
+        if (Intent.CATEGORY_HOME in categories || Intent.CATEGORY_LAUNCHER in categories) {
+            requestNavigation(Screen.Home)
+        }
+    }
+
+    private fun requestNavigation(screen: Screen) {
+        if (!navigationRequests.tryEmit(screen)) {
+            lifecycleScope.launch {
+                navigationRequests.emit(screen)
+            }
+        }
     }
 
     private fun hideSystemUI() {

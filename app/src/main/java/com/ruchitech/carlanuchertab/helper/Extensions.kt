@@ -1,10 +1,12 @@
 package com.ruchitech.carlanuchertab.helper
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.provider.Settings
+import com.ruchitech.carlanuchertab.MyAccessibilityService
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -79,13 +81,14 @@ fun createFuelLogEntry(
 
 
 fun isNotificationListenerEnabled(context: Context): Boolean {
-    val packageName = context.packageName
     val enabledListeners = Settings.Secure.getString(
         context.contentResolver,
         "enabled_notification_listeners"
-    )
+    ) ?: return false
+    val expectedComponent =
+        ComponentName(context, MusicNotificationListener::class.java).flattenToString()
 
-    return enabledListeners?.contains(packageName) == true
+    return enabledListeners.split(':').any { it.equals(expectedComponent, ignoreCase = true) }
 }
 
 fun openNotificationAccessSettings(context: Context) {
@@ -105,8 +108,10 @@ fun isAccessibilityEnabled(context: Context): Boolean {
         val services = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        )
-        return services?.contains(context.packageName) == true
+        ) ?: return false
+        val expectedComponent =
+            ComponentName(context, MyAccessibilityService::class.java).flattenToString()
+        return services.split(':').any { it.equals(expectedComponent, ignoreCase = true) }
     }
     return false
 }

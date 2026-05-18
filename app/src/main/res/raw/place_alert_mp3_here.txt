@@ -1,0 +1,5 @@
+Copy your startup voice clip into this folder as:
+alert.mp3
+
+Path:
+app/src/main/res/raw/alert.mp3
