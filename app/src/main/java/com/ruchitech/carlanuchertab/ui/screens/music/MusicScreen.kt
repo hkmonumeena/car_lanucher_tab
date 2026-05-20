@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -644,122 +645,137 @@ private fun SmartHubView(
     val rp = recentlyPlayed.filterTrackSearch(searchQuery)
     val mp = mostPlayed.filterTrackSearch(searchQuery)
 
-    if (viewMode == MusicLibraryViewMode.Grid) {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(148.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SmartSectionHeader("Recently added")
-            }
-            if (ra.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SmartSectionEmpty("No tracks in the library yet.")
-                }
-            } else {
-                items(ra, key = { "ra_${it.uri}" }) { track ->
-                    TrackGridItem(
-                        track = track,
-                        isLiked = track.uri in likedTrackUris,
-                        onClick = { onPlayRecent(track) },
-                    )
-                }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SmartSectionHeader("Recently played")
-            }
-            if (rp.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SmartSectionEmpty("Play songs to build this list.")
-                }
-            } else {
-                items(rp, key = { "rp_${it.uri}" }) { track ->
-                    TrackGridItem(
-                        track = track,
-                        isLiked = track.uri in likedTrackUris,
-                        onClick = { onPlayPlayed(track) },
-                    )
-                }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SmartSectionHeader("Most played")
-            }
-            if (mp.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SmartSectionEmpty("Counts appear after you listen with the new player.")
-                }
-            } else {
-                items(mp, key = { "mp_${it.uri}" }) { track ->
-                    TrackGridItem(
-                        track = track,
-                        isLiked = track.uri in likedTrackUris,
-                        onClick = { onPlayMost(track) },
-                    )
-                }
-            }
-        }
-        return
-    }
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Section 1: Recently added
         item {
-            SmartSectionHeader("Recently added")
-        }
-        if (ra.isEmpty()) {
-            item { SmartSectionEmpty("No tracks in the library yet.") }
-        } else {
-            items(ra, key = { "ra_${it.uri}" }) { track ->
-                TrackRow(
-                    track = track,
-                    isLiked = track.uri in likedTrackUris,
-                    onPlay = { onPlayRecent(track) },
-                    onAddToPlaylist = { onPlayRecent(track) }, // Corrected callback use
-                    onToggleLike = { onToggleLike(track) },
-                    onDelete = { onDelete(track) }
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SmartSectionHeader("Recently added")
+                if (ra.isEmpty()) {
+                    SmartSectionEmpty("No tracks in the library yet.")
+                } else {
+                    if (viewMode == MusicLibraryViewMode.Grid) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp)
+                        ) {
+                            items(ra, key = { "ra_${it.uri}" }) { track ->
+                                TrackGridItem(
+                                    track = track,
+                                    isLiked = track.uri in likedTrackUris,
+                                    onClick = { onPlayRecent(track) },
+                                    modifier = Modifier.width(148.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp)
+                        ) {
+                            items(ra, key = { "ra_${it.uri}" }) { track ->
+                                TrackRow(
+                                    track = track,
+                                    isLiked = track.uri in likedTrackUris,
+                                    onPlay = { onPlayRecent(track) },
+                                    onAddToPlaylist = { onPlayRecent(track) }, // Corrected callback use as in original code
+                                    onToggleLike = { onToggleLike(track) },
+                                    onDelete = { onDelete(track) },
+                                    modifier = Modifier.width(280.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
-        item { Spacer(modifier = Modifier.height(4.dp)) }
+
+        // Section 2: Recently played
         item {
-            SmartSectionHeader("Recently played")
-        }
-        if (rp.isEmpty()) {
-            item { SmartSectionEmpty("Play songs to build this list.") }
-        } else {
-            items(rp, key = { "rp_${it.uri}" }) { track ->
-                TrackRow(
-                    track = track,
-                    isLiked = track.uri in likedTrackUris,
-                    onPlay = { onPlayPlayed(track) },
-                    onAddToPlaylist = { onAddToPlaylist(track) },
-                    onToggleLike = { onToggleLike(track) },
-                    onDelete = { onDelete(track) }
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SmartSectionHeader("Recently played")
+                if (rp.isEmpty()) {
+                    SmartSectionEmpty("Play songs to build this list.")
+                } else {
+                    if (viewMode == MusicLibraryViewMode.Grid) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp)
+                        ) {
+                            items(rp, key = { "rp_${it.uri}" }) { track ->
+                                TrackGridItem(
+                                    track = track,
+                                    isLiked = track.uri in likedTrackUris,
+                                    onClick = { onPlayPlayed(track) },
+                                    modifier = Modifier.width(148.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp)
+                        ) {
+                            items(rp, key = { "rp_${it.uri}" }) { track ->
+                                TrackRow(
+                                    track = track,
+                                    isLiked = track.uri in likedTrackUris,
+                                    onPlay = { onPlayPlayed(track) },
+                                    onAddToPlaylist = { onAddToPlaylist(track) },
+                                    onToggleLike = { onToggleLike(track) },
+                                    onDelete = { onDelete(track) },
+                                    modifier = Modifier.width(280.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
-        item { Spacer(modifier = Modifier.height(4.dp)) }
+
+        // Section 3: Most played
         item {
-            SmartSectionHeader("Most played")
-        }
-        if (mp.isEmpty()) {
-            item { SmartSectionEmpty("Counts appear after you listen with the new player.") }
-        } else {
-            items(mp, key = { "mp_${it.uri}" }) { track ->
-                TrackRow(
-                    track = track,
-                    isLiked = track.uri in likedTrackUris,
-                    onPlay = { onPlayMost(track) },
-                    onAddToPlaylist = { onAddToPlaylist(track) },
-                    onToggleLike = { onToggleLike(track) },
-                    onDelete = { onDelete(track) }
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SmartSectionHeader("Most played")
+                if (mp.isEmpty()) {
+                    SmartSectionEmpty("Counts appear after you listen with the new player.")
+                } else {
+                    if (viewMode == MusicLibraryViewMode.Grid) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp)
+                        ) {
+                            items(mp, key = { "mp_${it.uri}" }) { track ->
+                                TrackGridItem(
+                                    track = track,
+                                    isLiked = track.uri in likedTrackUris,
+                                    onClick = { onPlayMost(track) },
+                                    modifier = Modifier.width(148.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp)
+                        ) {
+                            items(mp, key = { "mp_${it.uri}" }) { track ->
+                                TrackRow(
+                                    track = track,
+                                    isLiked = track.uri in likedTrackUris,
+                                    onPlay = { onPlayMost(track) },
+                                    onAddToPlaylist = { onAddToPlaylist(track) },
+                                    onToggleLike = { onToggleLike(track) },
+                                    onDelete = { onDelete(track) },
+                                    modifier = Modifier.width(280.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1546,10 +1562,10 @@ private fun TrackGridItem(
     track: MusicTrackEntity,
     isLiked: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(),
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(MusicScreenColors.RowFill)
             .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(14.dp))
@@ -1743,8 +1759,9 @@ private fun TrackRow(
     onAddToPlaylist: () -> Unit,
     onToggleLike: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(),
 ) {
-    LibraryListCard(onClick = onPlay) {
+    LibraryListCard(modifier = modifier, onClick = onPlay) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -1805,11 +1822,11 @@ private fun TrackRow(
 @Composable
 private fun LibraryListCard(
     onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier.fillMaxWidth(),
     content: @Composable () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(MusicScreenColors.RowFill)
             .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(16.dp))
