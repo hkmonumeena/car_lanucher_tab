@@ -326,7 +326,8 @@ fun MusicScreen(
                                 query = searchQuery,
                                 onQueryChange = { searchQuery = it },
                                 modifier = Modifier.weight(1f),
-                                compact = true
+                                compact = true,
+                                placeholder = "Search $libraryCountLabel"
                             )
                             MusicLibraryToolbar(
                                 countLabel = libraryCountLabel,
@@ -339,7 +340,8 @@ fun MusicScreen(
                         MusicSearchField(
                             query = searchQuery,
                             onQueryChange = { searchQuery = it },
-                            compact = useCompactLibraryChrome
+                            compact = useCompactLibraryChrome,
+                            placeholder = "Search $libraryCountLabel"
                         )
                     }
 
@@ -813,7 +815,7 @@ private fun MusicHeader(
                 Text(
                     text = "Music Library",
                     color = MusicScreenColors.TextPrimary,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
@@ -850,6 +852,7 @@ private fun MusicSearchField(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    placeholder: String = "Search library",
 ) {
     OutlinedTextField(
         value = query,
@@ -857,10 +860,10 @@ private fun MusicSearchField(
         label = if (compact) {
             null
         } else {
-            { Text("Search library", color = MusicScreenColors.TextMuted) }
+            { Text(placeholder, color = MusicScreenColors.TextMuted) }
         },
         placeholder = if (compact) {
-            { Text("Search library", color = MusicScreenColors.TextMuted) }
+            { Text(placeholder, color = MusicScreenColors.TextMuted) }
         } else {
             null
         },
@@ -947,7 +950,7 @@ private fun MusicLibraryToolbar(
             Arrangement.SpaceBetween
         },
     ) {
-        Text(
+       /* Text(
             text = countLabel,
             color = MusicScreenColors.TextSecondary,
             style = if (compact) {
@@ -957,7 +960,7 @@ private fun MusicLibraryToolbar(
             },
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
-        )
+        )*/
         Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)) {
             ViewModeToggleButton(
                 selected = viewMode == MusicLibraryViewMode.List,

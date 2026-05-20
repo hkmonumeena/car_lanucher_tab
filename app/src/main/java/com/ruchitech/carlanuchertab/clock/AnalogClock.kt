@@ -143,7 +143,7 @@ private fun ClockInfoPanel(
             .padding(horizontal = 22.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
+        /*Text(
             text = digitalTime,
             color = GoldLight,
             style = TextStyle(
@@ -152,10 +152,7 @@ private fun ClockInfoPanel(
                 letterSpacing = 6.sp
             ),
             textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
+        )*/
         Box(
             modifier = Modifier
                 .size(width = 48.dp, height = 1.dp)
