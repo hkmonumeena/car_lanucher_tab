@@ -1,7 +1,11 @@
 package com.ruchitech.carlanuchertab.ui.screens.music
 
+import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -60,6 +64,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,9 +72,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ruchitech.carlanuchertab.music.AlbumSummary
 import com.ruchitech.carlanuchertab.music.GenreSummary
@@ -86,6 +94,7 @@ import com.ruchitech.carlanuchertab.ui.composables.MusicPlayerStyle
 import com.ruchitech.carlanuchertab.ui.composables.MusicQueueBottomSheet
 import com.ruchitech.carlanuchertab.ui.composables.MusicTextInputDialog
 import com.ruchitech.carlanuchertab.ui.composables.formatDuration
+import kotlinx.coroutines.launch
 private object MusicScreenColors {
     val BackgroundTop = Color(0xFF050A10)
     val BackgroundBottom = Color(0xFF121E2C)
@@ -112,6 +121,34 @@ private enum class MusicLibraryViewMode {
     Grid,
 }
 
+private fun createMusicFolderPickerIntent(): Intent {
+    return Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+    }
+}
+
+private fun requiredAudioReadPermission(): String {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+}
+
+private fun Context.hasAudioReadPermission(): Boolean {
+    return ContextCompat.checkSelfPermission(
+        this,
+        requiredAudioReadPermission()
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+}
+
+private fun Context.canOpenDocumentTreePicker(): Boolean {
+    return createMusicFolderPickerIntent().resolveActivity(packageManager) != null
+}
+
 @Composable
 fun MusicScreen(
     onBack: () -> Unit,
@@ -132,6 +169,11 @@ fun MusicScreen(
     val isCurrentTrackLiked = currentTrack != null && currentTrack.uri in likedTrackUris
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val configuration = LocalConfiguration.current
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val canOpenDocumentTreePicker = remember(context) { context.canOpenDocumentTreePicker() }
+    val useCompactLibraryChrome = configuration.screenWidthDp > configuration.screenHeightDp
     var selectedTab by rememberSaveable { mutableStateOf(MusicTab.Songs) }
     var libraryViewMode by rememberSaveable { mutableStateOf(MusicLibraryViewMode.List) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -152,6 +194,43 @@ fun MusicScreen(
         if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
         val uri = data.data ?: return@rememberLauncherForActivityResult
         viewModel.onFolderSelected(uri, data.flags)
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.useDeviceLibrary()
+        } else {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    "Allow audio access to scan the device music library."
+                )
+            }
+        }
+    }
+
+    val openMusicLibrarySource: () -> Unit = {
+        if (canOpenDocumentTreePicker) {
+            try {
+                folderLauncher.launch(createMusicFolderPickerIntent())
+            } catch (_: ActivityNotFoundException) {
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        "Folder picker is unavailable on this device. Scanning the device music library instead."
+                    )
+                }
+                if (context.hasAudioReadPermission()) {
+                    viewModel.useDeviceLibrary()
+                } else {
+                    audioPermissionLauncher.launch(requiredAudioReadPermission())
+                }
+            }
+        } else if (context.hasAudioReadPermission()) {
+            viewModel.useDeviceLibrary()
+        } else {
+            audioPermissionLauncher.launch(requiredAudioReadPermission())
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -182,6 +261,21 @@ fun MusicScreen(
     }
     val showLibraryToolbar = !settings.folderUri.isNullOrBlank() &&
         selectedAlbum == null && selectedGenre == null && selectedPlaylist == null
+    val librarySetupTitle = if (canOpenDocumentTreePicker) {
+        "Choose a folder to build your library"
+    } else {
+        "Scan the device music library"
+    }
+    val librarySetupSubtitle = if (canOpenDocumentTreePicker) {
+        "The player will scan this folder recursively and keep it available across Home and Music screens."
+    } else {
+        "This stereo does not provide a folder picker, so the player will import songs from the system music library instead."
+    }
+    val librarySetupActionLabel = if (canOpenDocumentTreePicker) {
+        "Choose Folder"
+    } else {
+        "Scan Device Library"
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -216,41 +310,44 @@ fun MusicScreen(
                     MusicHeader(
                         settings = settings,
                         onBack = onBack,
-                        onChooseFolder = {
-                            folderLauncher.launch(
-                                Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                                    addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-                                    addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
-                                }
-                            )
-                        },
+                        onChooseFolder = openMusicLibrarySource,
                         onRescan = viewModel::rescanLibrary
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        label = { Text("Search library", color = MusicScreenColors.TextMuted) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = MusicScreenColors.TextPrimary,
-                            unfocusedTextColor = MusicScreenColors.TextPrimary,
-                            focusedBorderColor = MusicScreenColors.Accent,
-                            unfocusedBorderColor = MusicScreenColors.Border,
-                            cursorColor = MusicScreenColors.Accent,
-                            focusedLabelColor = MusicScreenColors.Accent,
-                            unfocusedLabelColor = MusicScreenColors.TextMuted
+                    Spacer(modifier = Modifier.height(if (useCompactLibraryChrome) 8.dp else 12.dp))
+
+                    if (useCompactLibraryChrome && showLibraryToolbar) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MusicSearchField(
+                                query = searchQuery,
+                                onQueryChange = { searchQuery = it },
+                                modifier = Modifier.weight(1f),
+                                compact = true
+                            )
+                            MusicLibraryToolbar(
+                                countLabel = libraryCountLabel,
+                                viewMode = libraryViewMode,
+                                onViewModeChange = { libraryViewMode = it },
+                                compact = true,
+                            )
+                        }
+                    } else {
+                        MusicSearchField(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            compact = useCompactLibraryChrome
                         )
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    Spacer(modifier = Modifier.height(if (useCompactLibraryChrome) 8.dp else 12.dp))
 
                     MusicTabs(
                         selectedTab = selectedTab,
+                        compact = useCompactLibraryChrome,
                         onTabSelected = {
                             selectedAlbum = null
                             selectedGenre = null
@@ -258,9 +355,9 @@ fun MusicScreen(
                             selectedTab = it
                         }
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(if (useCompactLibraryChrome) 8.dp else 12.dp))
 
-                    if (showLibraryToolbar) {
+                    if (showLibraryToolbar && !useCompactLibraryChrome) {
                         MusicLibraryToolbar(
                             countLabel = libraryCountLabel,
                             viewMode = libraryViewMode,
@@ -272,19 +369,10 @@ fun MusicScreen(
                     when {
                         settings.folderUri.isNullOrBlank() -> {
                             MusicEmptyBrowser(
-                                title = "Choose a folder to build your library",
-                                subtitle = "The player will scan this folder recursively and keep it available across Home and Music screens.",
-                                actionLabel = "Choose Folder",
-                                onAction = {
-                                    folderLauncher.launch(
-                                        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                                            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-                                            addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
-                                        }
-                                    )
-                                }
+                                title = librarySetupTitle,
+                                subtitle = librarySetupSubtitle,
+                                actionLabel = librarySetupActionLabel,
+                                onAction = openMusicLibrarySource
                             )
                         }
 
@@ -729,7 +817,7 @@ private fun MusicHeader(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = settings.folderName ?: "No folder selected",
+                    text = settings.folderName ?: "No library selected",
                     color = MusicScreenColors.TextSecondary,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
@@ -741,7 +829,7 @@ private fun MusicHeader(
             IconButton(onClick = onChooseFolder) {
                 Icon(
                     imageVector = Icons.Default.FolderOpen,
-                    contentDescription = "Choose folder",
+                    contentDescription = "Choose music library",
                     tint = MusicScreenColors.Accent
                 )
             }
@@ -757,21 +845,62 @@ private fun MusicHeader(
 }
 
 @Composable
+private fun MusicSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        label = if (compact) {
+            null
+        } else {
+            { Text("Search library", color = MusicScreenColors.TextMuted) }
+        },
+        placeholder = if (compact) {
+            { Text("Search library", color = MusicScreenColors.TextMuted) }
+        } else {
+            null
+        },
+        modifier = modifier.fillMaxWidth(),
+        singleLine = true,
+        shape = RoundedCornerShape(if (compact) 12.dp else 14.dp),
+        textStyle = if (compact) {
+            MaterialTheme.typography.bodyMedium
+        } else {
+            MaterialTheme.typography.bodyLarge
+        },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = MusicScreenColors.TextPrimary,
+            unfocusedTextColor = MusicScreenColors.TextPrimary,
+            focusedBorderColor = MusicScreenColors.Accent,
+            unfocusedBorderColor = MusicScreenColors.Border,
+            cursorColor = MusicScreenColors.Accent,
+            focusedLabelColor = MusicScreenColors.Accent,
+            unfocusedLabelColor = MusicScreenColors.TextMuted
+        )
+    )
+}
+
+@Composable
 private fun MusicTabs(
     selectedTab: MusicTab,
+    compact: Boolean = false,
     onTabSelected: (MusicTab) -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
     ) {
         MusicTab.entries.forEach { tab ->
             val selected = tab == selectedTab
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(if (compact) 18.dp else 20.dp))
                     .background(
                         if (selected) MusicScreenColors.Accent.copy(alpha = 0.18f)
                         else Color.White.copy(alpha = 0.05f)
@@ -779,15 +908,22 @@ private fun MusicTabs(
                     .border(
                         1.dp,
                         if (selected) MusicScreenColors.Accent.copy(alpha = 0.5f) else MusicScreenColors.Border,
-                        RoundedCornerShape(20.dp)
+                        RoundedCornerShape(if (compact) 18.dp else 20.dp)
                     )
                     .clickable { onTabSelected(tab) }
-                    .padding(horizontal = 18.dp, vertical = 9.dp)
+                    .padding(
+                        horizontal = if (compact) 14.dp else 18.dp,
+                        vertical = if (compact) 7.dp else 9.dp
+                    )
             ) {
                 Text(
                     text = tab.name,
                     color = if (selected) MusicScreenColors.Accent else MusicScreenColors.TextSecondary,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = if (compact) {
+                        MaterialTheme.typography.labelMedium
+                    } else {
+                        MaterialTheme.typography.labelLarge
+                    },
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
@@ -800,29 +936,41 @@ private fun MusicLibraryToolbar(
     countLabel: String,
     viewMode: MusicLibraryViewMode,
     onViewModeChange: (MusicLibraryViewMode) -> Unit,
+    compact: Boolean = false,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = if (compact) Modifier else Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = if (compact) {
+            Arrangement.spacedBy(8.dp)
+        } else {
+            Arrangement.SpaceBetween
+        },
     ) {
         Text(
             text = countLabel,
             color = MusicScreenColors.TextSecondary,
-            style = MaterialTheme.typography.titleSmall,
+            style = if (compact) {
+                MaterialTheme.typography.labelLarge
+            } else {
+                MaterialTheme.typography.titleSmall
+            },
             fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)) {
             ViewModeToggleButton(
                 selected = viewMode == MusicLibraryViewMode.List,
                 icon = Icons.AutoMirrored.Filled.ViewList,
                 contentDescription = "List view",
+                compact = compact,
                 onClick = { onViewModeChange(MusicLibraryViewMode.List) },
             )
             ViewModeToggleButton(
                 selected = viewMode == MusicLibraryViewMode.Grid,
                 icon = Icons.Default.GridView,
                 contentDescription = "Grid view",
+                compact = compact,
                 onClick = { onViewModeChange(MusicLibraryViewMode.Grid) },
             )
         }
@@ -834,13 +982,14 @@ private fun ViewModeToggleButton(
     selected: Boolean,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
+    compact: Boolean = false,
     onClick: () -> Unit,
 ) {
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .size(if (compact) 32.dp else 36.dp)
+            .clip(RoundedCornerShape(if (compact) 8.dp else 10.dp))
             .background(
                 if (selected) MusicScreenColors.Accent.copy(alpha = 0.18f)
                 else Color.Transparent
@@ -848,14 +997,14 @@ private fun ViewModeToggleButton(
             .border(
                 width = 1.dp,
                 color = if (selected) MusicScreenColors.Accent.copy(alpha = 0.45f) else Color.Transparent,
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(if (compact) 8.dp else 10.dp),
             ),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = if (selected) MusicScreenColors.Accent else MusicScreenColors.TextMuted,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(if (compact) 18.dp else 20.dp),
         )
     }
 }

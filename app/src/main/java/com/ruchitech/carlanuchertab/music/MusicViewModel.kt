@@ -146,6 +146,16 @@ class MusicViewModel @Inject constructor(
         }
     }
 
+    fun useDeviceLibrary() {
+        viewModelScope.launch {
+            runCatching {
+                repository.setDeviceLibrary()
+            }.onFailure {
+                _messages.emit(it.message ?: "Unable to scan the device music library.")
+            }
+        }
+    }
+
     fun rescanLibrary() {
         viewModelScope.launch {
             runCatching {

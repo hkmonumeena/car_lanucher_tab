@@ -375,6 +375,7 @@ fun MusicAlbumArtwork(
     pulseWhenPlaying: Boolean = false,
     isPlaying: Boolean = false,
 ) {
+    val hasArtwork = !artworkPath.isNullOrBlank()
     val pulseScale = if (pulseWhenPlaying && isPlaying) {
         val transition = rememberInfiniteTransition(label = "albumPulse")
         transition.animateFloat(
@@ -401,12 +402,12 @@ fun MusicAlbumArtwork(
         AsyncImage(
             model = artworkPath?.let(::File),
             contentDescription = title,
-            contentScale = ContentScale.Fit,
+            contentScale = if (hasArtwork) ContentScale.Crop else ContentScale.Fit,
             placeholder = androidx.compose.ui.res.painterResource(R.drawable.music),
             error = androidx.compose.ui.res.painterResource(R.drawable.music),
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp)
+                .padding(if (hasArtwork) 0.dp else 10.dp)
                 .graphicsLayer {
                     scaleX = pulseScale
                     scaleY = pulseScale
@@ -432,99 +433,27 @@ private fun CompactNowPlaying(
     onOpenQueue: () -> Unit,
     dragModifier: Modifier,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(dragModifier),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "NOW PLAYING",
-                color = MusicPalette.Accent,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp,
-                modifier = Modifier.weight(1f)
-            )
-            PlayerTopActions(
-                isLiked = isLiked,
-                showDelete = false,
-                onAddToPlaylist = onAddToPlaylist,
-                onToggleLike = onToggleLike,
-                onDelete = {},
-                onOpenLibrary = onOpenLibrary,
-                showLibrary = true
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            val artSize = minOf(maxWidth, maxHeight).coerceAtMost(maxWidth)
-            MusicAlbumArtwork(
-                artworkPath = track.artworkPath,
-                title = track.title,
-                modifier = Modifier
-                    .size(artSize)
-                    .align(Alignment.Center),
-                cornerRadius = 18.dp,
-                pulseWhenPlaying = true,
-                isPlaying = playerState.isPlaying
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        TrackMetadata(
-            trackUri = track.uri,
-            title = track.title,
-            artist = track.artist,
-            album = track.album,
-            genre = track.genre,
-            titleStyle = MaterialTheme.typography.titleLarge,
-            compact = false,
-            modifier = Modifier.fillMaxWidth(),
-            centered = true
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        PlaybackSlider(
-            progressMs = playerState.progressMs,
-            durationMs = playerState.durationMs,
-            onPositionChange = onSeekTo,
-            compact = true,
-            shuffleEnabled = playerState.shuffleEnabled,
-            repeatMode = playerState.repeatMode,
-            onToggleShuffle = onToggleShuffle,
-            onCycleRepeat = onCycleRepeat,
-            onOpenQueue = onOpenQueue,
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        PlayerControlsRow(
-            isPlaying = playerState.isPlaying,
-            onPrevious = onSkipPrevious,
-            onTogglePlayback = onTogglePlayback,
-            onNext = onSkipNext,
-            playButtonSize = 68.dp,
-            sideButtonSize = 46.dp,
-            playIconSize = 34.dp,
-            sideIconSize = 26.dp
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-    }
+    HorizontalNowPlayingLayout(
+        track = track,
+        playerState = playerState,
+        compact = true,
+        isLiked = isLiked,
+        showDelete = false,
+        showLibrary = true,
+        headerText = "NOW PLAYING",
+        onOpenLibrary = onOpenLibrary,
+        onDelete = {},
+        onTogglePlayback = onTogglePlayback,
+        onSeekTo = onSeekTo,
+        onSkipNext = onSkipNext,
+        onSkipPrevious = onSkipPrevious,
+        onToggleLike = onToggleLike,
+        onAddToPlaylist = onAddToPlaylist,
+        onToggleShuffle = onToggleShuffle,
+        onCycleRepeat = onCycleRepeat,
+        onOpenQueue = onOpenQueue,
+        dragModifier = dragModifier,
+    )
 }
 
 @Composable
@@ -545,86 +474,159 @@ private fun ExpandedNowPlaying(
     onOpenQueue: () -> Unit,
     dragModifier: Modifier,
 ) {
-    Column(
+    HorizontalNowPlayingLayout(
+        track = track,
+        playerState = playerState,
+        compact = false,
+        isLiked = isLiked,
+        showDelete = allowDelete,
+        showLibrary = false,
+        headerText = null,
+        onOpenLibrary = {},
+        onDelete = onDelete,
+        onTogglePlayback = onTogglePlayback,
+        onSeekTo = onSeekTo,
+        onSkipNext = onSkipNext,
+        onSkipPrevious = onSkipPrevious,
+        onToggleLike = onToggleLike,
+        onAddToPlaylist = onAddToPlaylist,
+        onToggleShuffle = onToggleShuffle,
+        onCycleRepeat = onCycleRepeat,
+        onOpenQueue = onOpenQueue,
+        dragModifier = dragModifier,
+    )
+}
+
+@Composable
+private fun HorizontalNowPlayingLayout(
+    track: MusicTrackEntity,
+    playerState: MusicPlayerUiState,
+    compact: Boolean,
+    isLiked: Boolean,
+    showDelete: Boolean,
+    showLibrary: Boolean,
+    headerText: String?,
+    onOpenLibrary: () -> Unit,
+    onDelete: () -> Unit,
+    onTogglePlayback: () -> Unit,
+    onSeekTo: (Long) -> Unit,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
+    onToggleLike: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeat: () -> Unit,
+    onOpenQueue: () -> Unit,
+    dragModifier: Modifier,
+) {
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .then(dragModifier),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .then(dragModifier)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            PlayerTopActions(
-                isLiked = isLiked,
-                showDelete = allowDelete,
-                onAddToPlaylist = onAddToPlaylist,
-                onToggleLike = onToggleLike,
-                onDelete = onDelete,
-                onOpenLibrary = {},
-                showLibrary = false
-            )
+        val contentGap = if (compact) 14.dp else 18.dp
+        val sectionGap = if (compact) 10.dp else 14.dp
+        val artSize = if (compact) {
+            minOf(maxHeight * 0.48f, maxWidth * 0.34f).coerceIn(112.dp, 154.dp)
+        } else {
+            minOf(maxHeight * 0.56f, maxWidth * 0.38f).coerceIn(176.dp, 256.dp)
+        }
+        val titleStyle = if (compact) {
+            MaterialTheme.typography.titleLarge
+        } else {
+            MaterialTheme.typography.headlineSmall
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(sectionGap)
         ) {
-            val artSize = minOf(maxWidth, maxHeight).coerceAtMost(280.dp)
-            MusicAlbumArtwork(
-                artworkPath = track.artworkPath,
-                title = track.title,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (headerText != null) {
+                    Text(
+                        text = headerText,
+                        color = MusicPalette.Accent,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+
+                PlayerTopActions(
+                    isLiked = isLiked,
+                    showDelete = showDelete,
+                    showLibrary = showLibrary,
+                    onAddToPlaylist = onAddToPlaylist,
+                    onToggleLike = onToggleLike,
+                    onDelete = onDelete,
+                    onOpenLibrary = onOpenLibrary,
+                )
+            }
+
+            Row(
                 modifier = Modifier
-                    .size(artSize)
-                    .align(Alignment.Center),
-                cornerRadius = 20.dp
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(contentGap),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MusicAlbumArtwork(
+                    artworkPath = track.artworkPath,
+                    title = track.title,
+                    modifier = Modifier.size(artSize),
+                    cornerRadius = if (compact) 18.dp else 22.dp,
+                    pulseWhenPlaying = compact,
+                    isPlaying = playerState.isPlaying
+                )
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 14.dp)
+                ) {
+                    TrackMetadata(
+                        trackUri = track.uri,
+                        title = track.title,
+                        artist = track.artist,
+                        album = track.album,
+                        genre = track.genre,
+                        titleStyle = titleStyle,
+                        compact = compact,
+                        modifier = Modifier.fillMaxWidth(),
+                        centered = false
+                    )
+                }
+            }
+
+            PlaybackSlider(
+                progressMs = playerState.progressMs,
+                durationMs = playerState.durationMs,
+                onPositionChange = onSeekTo,
+                compact = compact,
+                shuffleEnabled = playerState.shuffleEnabled,
+                repeatMode = playerState.repeatMode,
+                onToggleShuffle = onToggleShuffle,
+                onCycleRepeat = onCycleRepeat,
+                onOpenQueue = onOpenQueue,
+            )
+
+            PlayerControlsRow(
+                isPlaying = playerState.isPlaying,
+                onPrevious = onSkipPrevious,
+                onTogglePlayback = onTogglePlayback,
+                onNext = onSkipNext,
+                playButtonSize = if (compact) 56.dp else 62.dp,
+                sideButtonSize = if (compact) 40.dp else 48.dp,
+                playIconSize = if (compact) 30.dp else 32.dp,
+                sideIconSize = if (compact) 22.dp else 26.dp,
+                buttonSpacing = if (compact) 14.dp else 24.dp
             )
         }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        TrackMetadata(
-            trackUri = track.uri,
-            title = track.title,
-            artist = track.artist,
-            album = track.album,
-            genre = track.genre,
-            titleStyle = MaterialTheme.typography.headlineSmall,
-            compact = false,
-            modifier = Modifier.fillMaxWidth(),
-            centered = true
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        PlaybackSlider(
-            progressMs = playerState.progressMs,
-            durationMs = playerState.durationMs,
-            onPositionChange = onSeekTo,
-            compact = false,
-            shuffleEnabled = playerState.shuffleEnabled,
-            repeatMode = playerState.repeatMode,
-            onToggleShuffle = onToggleShuffle,
-            onCycleRepeat = onCycleRepeat,
-            onOpenQueue = onOpenQueue,
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        PlayerControlsRow(
-            isPlaying = playerState.isPlaying,
-            onPrevious = onSkipPrevious,
-            onTogglePlayback = onTogglePlayback,
-            onNext = onSkipNext,
-            playButtonSize = 62.dp,
-            sideButtonSize = 48.dp,
-            playIconSize = 32.dp,
-            sideIconSize = 26.dp
-        )
     }
 }
 
@@ -1062,6 +1064,7 @@ private fun PlayerControlsRow(
     sideButtonSize: Dp,
     playIconSize: Dp = 30.dp,
     sideIconSize: Dp = 26.dp,
+    buttonSpacing: Dp = 24.dp,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1080,7 +1083,7 @@ private fun PlayerControlsRow(
             )
         }
 
-        Spacer(modifier = Modifier.width(24.dp))
+        Spacer(modifier = Modifier.width(buttonSpacing))
 
         MusicControlButton(
             onClick = onTogglePlayback,
@@ -1095,7 +1098,7 @@ private fun PlayerControlsRow(
             )
         }
 
-        Spacer(modifier = Modifier.width(24.dp))
+        Spacer(modifier = Modifier.width(buttonSpacing))
 
         MusicControlButton(
             onClick = onNext,

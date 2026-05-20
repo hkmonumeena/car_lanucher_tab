@@ -51,17 +51,34 @@ class MyApp : Application() {
                 val appInfo = activityInfo.applicationInfo
 
                 try {
-                    val name = appInfo.loadLabel(packageManager).toString()
-                    val icon = appInfo.loadIcon(packageManager)
-                    val packageName = appInfo.packageName
+                    val name = resolveInfo.loadLabel(packageManager)
+                        ?.toString()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: appInfo.loadLabel(packageManager).toString()
+                    val icon = resolveInfo.loadIcon(packageManager)
+                    val packageName = activityInfo.packageName
+                    val launchActivityName = activityInfo.name
 
-                    apps.add(AppInfo(name, packageName, icon))
+                    apps.add(
+                        AppInfo(
+                            name = name,
+                            packageName = packageName,
+                            launchActivityName = launchActivityName,
+                            icon = icon
+                        )
+                    )
                 } catch (e: Exception) {
                     Log.e("AppLoader", "Failed to load app info for: ${appInfo.packageName}", e)
                 }
             }
 
-            val sorted = apps.sortedBy { it.name.lowercase() }
+            val sorted = apps
+                .distinctBy { it.stableKey }
+                .sortedWith(
+                    compareBy<AppInfo> { it.name.lowercase() }
+                        .thenBy { it.packageName }
+                        .thenBy { it.launchActivityName }
+                )
             Log.d("AppLoader", "Loaded ${sorted.size} apps")
             sorted
         }

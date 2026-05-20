@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "883856264085",
+    "project_id": "carlanuchertab",
+    "storage_bucket": "carlanuchertab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:883856264085:android:674f776d5b685f5355849c",
+        "android_client_info": {
+          "package_name": "com.ruchitech.carlanuchertab"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_hI_Lhr6ooULr40r4MxGNjqZsvsrFvl4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

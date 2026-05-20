@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.ruchitech.carlanuchertab" />
+                  <option name="mobileSdkAppId" value="1:883856264085:android:674f776d5b685f5355849c" />
+                  <option name="projectId" value="carlanuchertab" />
+                  <option name="projectNumber" value="883856264085" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

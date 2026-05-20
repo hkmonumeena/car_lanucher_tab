@@ -21,6 +21,9 @@ playServicesLocation = "21.3.0"
 playServicesMaps = "19.2.0"
 roomRuntime = "2.7.2"
 snowfall = "0.9.10"
+firebaseCrashlytics = "20.0.6"
+googleGmsGoogleServices = "4.4.4"
+googleFirebaseCrashlytics = "3.0.7"
 
 [libraries]
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissions" }
@@ -54,9 +57,12 @@ material = { module = "com.google.android.material:material", version.ref = "mat
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 play-services-maps = { module = "com.google.android.gms:play-services-maps", version.ref = "playServicesMaps" }
 snowfall = { module = "com.github.idapgroup:Snowfall", version.ref = "snowfall" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics", version.ref = "firebaseCrashlytics" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinxSerializationJson"  }
+google-gms-google-services = { id = "com.google.gms.google-services", version.ref = "googleGmsGoogleServices" }
+google-firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "googleFirebaseCrashlytics" }
 

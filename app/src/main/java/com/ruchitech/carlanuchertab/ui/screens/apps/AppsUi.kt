@@ -1,5 +1,6 @@
 package com.ruchitech.carlanuchertab.ui.screens.apps
 
+import android.content.Intent
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -367,7 +368,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(filteredApps, key = { "${it.packageName}_${it.name}" }) { app ->
+                    items(filteredApps, key = { it.stableKey }) { app ->
                         AppGridItemPremium(app = app)
                     }
                 }
@@ -431,8 +432,12 @@ fun AppGridItemPremium(app: AppInfo) {
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
                 onClick = {
-                    val launchIntent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                    launchIntent?.let { context.startActivity(it) }
+                    val launchIntent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                        setClassName(app.packageName, app.launchActivityName)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(launchIntent)
                 }
             )
             .padding(14.dp),
@@ -483,5 +488,9 @@ fun AppGridItemPremium(app: AppInfo) {
 data class AppInfo(
     val name: String,
     val packageName: String,
+    val launchActivityName: String,
     val icon: Drawable?,
-)
+) {
+    val stableKey: String
+        get() = "$packageName/$launchActivityName"
+}

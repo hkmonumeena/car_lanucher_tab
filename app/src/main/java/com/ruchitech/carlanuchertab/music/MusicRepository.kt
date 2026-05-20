@@ -1,9 +1,14 @@
 package com.ruchitech.carlanuchertab.music
 
+import android.Manifest
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -22,6 +27,11 @@ class MusicRepository @Inject constructor(
     private val musicDao: MusicDao,
     private val playerManager: MusicPlayerManager,
 ) {
+    private companion object {
+        const val DEVICE_LIBRARY_URI = "music-library://device"
+        const val DEVICE_LIBRARY_NAME = "Device Library"
+    }
+
     val settingsFlow: Flow<MusicSettingsEntity> =
         musicDao.observeSettings().map { it ?: MusicSettingsEntity() }
 
@@ -90,6 +100,22 @@ class MusicRepository @Inject constructor(
         rescanLibrary()
     }
 
+    suspend fun setDeviceLibrary() = withContext(Dispatchers.IO) {
+        if (!hasAudioReadPermission()) {
+            throw SecurityException("Allow audio access to scan the device music library.")
+        }
+
+        musicDao.upsertSettings(
+            getSettings().copy(
+                folderUri = DEVICE_LIBRARY_URI,
+                folderName = DEVICE_LIBRARY_NAME,
+                scanStatus = MusicScanStatus.IDLE,
+                errorMessage = null
+            )
+        )
+        rescanLibrary()
+    }
+
     suspend fun rescanLibrary() = withContext(Dispatchers.IO) {
         val settings = getSettings()
         val folderUri = settings.folderUri
@@ -109,6 +135,37 @@ class MusicRepository @Inject constructor(
                 errorMessage = null
             )
         )
+
+        if (folderUri == DEVICE_LIBRARY_URI) {
+            val tracks = try {
+                scanDeviceLibrary()
+            } catch (error: SecurityException) {
+                musicDao.upsertSettings(
+                    settings.copy(
+                        scanStatus = MusicScanStatus.ERROR,
+                        errorMessage = error.message
+                            ?: "Allow audio access to scan the device music library."
+                    )
+                )
+                return@withContext
+            }
+
+            musicDao.replaceLibrary(tracks)
+            musicDao.upsertSettings(
+                settings.copy(
+                    folderUri = folderUri,
+                    folderName = DEVICE_LIBRARY_NAME,
+                    lastScanTimestamp = System.currentTimeMillis(),
+                    scanStatus = MusicScanStatus.READY,
+                    errorMessage = if (tracks.isEmpty()) {
+                        "No songs were found in the device music library."
+                    } else {
+                        null
+                    }
+                )
+            )
+            return@withContext
+        }
 
         val root = DocumentFile.fromTreeUri(context, Uri.parse(folderUri))
         if (root == null || !root.exists()) {
@@ -245,6 +302,77 @@ class MusicRepository @Inject constructor(
         musicDao.updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
     }
 
+    private fun scanDeviceLibrary(): List<MusicTrackEntity> {
+        if (!hasAudioReadPermission()) {
+            throw SecurityException("Allow audio access to scan the device music library.")
+        }
+
+        val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.MIME_TYPE,
+            MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.DATE_MODIFIED,
+        )
+        val selection = "(${MediaStore.Audio.Media.IS_MUSIC} != 0 OR ${MediaStore.Audio.Media.MIME_TYPE} LIKE 'audio/%')"
+        val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+
+        return context.contentResolver.query(
+            collection,
+            projection,
+            selection,
+            null,
+            sortOrder
+        )?.use { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val displayNameIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val titleIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val albumIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val trackIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+            val mimeTypeIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+            val sizeIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+            val modifiedIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+
+            buildList {
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idIndex)
+                    val uri = ContentUris.withAppendedId(collection, id)
+                    val displayName = cursor.getString(displayNameIndex)
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "Track $id"
+                    val fallbackTitle = displayName.substringBeforeLast('.').ifBlank { displayName }
+
+                    add(
+                        MusicTrackEntity(
+                            uri = uri.toString(),
+                            displayName = displayName,
+                            title = cursor.getString(titleIndex).normalizedOr(fallbackTitle),
+                            artist = cursor.getString(artistIndex).normalizedOr("Unknown Artist"),
+                            album = cursor.getString(albumIndex).normalizedOr("Unknown Album"),
+                            genre = "Unknown Genre",
+                            durationMs = cursor.getLong(durationIndex),
+                            trackNumber = cursor.getInt(trackIndex).coerceAtLeast(0),
+                            discNumber = 0,
+                            artworkPath = cacheArtwork(uri.toString(), extractEmbeddedArtwork(uri)),
+                            mimeType = cursor.getString(mimeTypeIndex),
+                            fileSizeBytes = cursor.getLong(sizeIndex),
+                            lastModified = cursor.getLong(modifiedIndex) * 1_000L,
+                            isAvailable = true
+                        )
+                    )
+                }
+            }
+        }.orEmpty()
+    }
+
     private fun scanFolder(folder: DocumentFile, tracks: MutableList<MusicTrackEntity>) {
         folder.listFiles().forEach { child ->
             when {
@@ -291,6 +419,18 @@ class MusicRepository @Inject constructor(
         }
     }
 
+    private fun extractEmbeddedArtwork(uri: Uri): ByteArray? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            retriever.embeddedPicture
+        } catch (_: Exception) {
+            null
+        } finally {
+            retriever.release()
+        }
+    }
+
     private fun cacheArtwork(trackUri: String, imageBytes: ByteArray?): String? {
         if (imageBytes == null || imageBytes.isEmpty()) return null
         val artworkDirectory = File(context.cacheDir, "music_artwork").apply { mkdirs() }
@@ -316,8 +456,23 @@ class MusicRepository @Inject constructor(
         }
     }
 
+    private fun hasAudioReadPermission(): Boolean {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        return ContextCompat.checkSelfPermission(context, permission) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
     private fun String?.normalizedOr(fallback: String): String {
-        return if (this.isNullOrBlank()) fallback else this.trim()
+        val normalized = this?.trim().orEmpty()
+        return if (normalized.isBlank() || normalized.equals("<unknown>", ignoreCase = true)) {
+            fallback
+        } else {
+            normalized
+        }
     }
 
     private fun String?.isSupportedAudioFile(mimeType: String?): Boolean {

@@ -7,6 +7,8 @@ plugins {
     alias(libs.plugins.kotlinx.serialization)
     id("kotlin-kapt")
     id("dagger.hilt.android.plugin")
+    alias(libs.plugins.google.gms.google.services)
+    alias(libs.plugins.google.firebase.crashlytics)
 
 }
 
@@ -66,6 +68,7 @@ dependencies {
   //  implementation(libs.kotlinx.serialization.json)
     // Room components
     implementation (libs.androidx.room.runtime)
+    implementation(libs.firebase.crashlytics)
     kapt (libs.androidx.room.compiler)
     implementation(libs.kotlinx.metadata.jvm)
 // Optional - Kotlin Extensions and Coroutines support
