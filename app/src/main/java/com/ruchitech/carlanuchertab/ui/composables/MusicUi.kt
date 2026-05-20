@@ -1,6 +1,21 @@
 package com.ruchitech.carlanuchertab.ui.composables
 
+import android.graphics.drawable.BitmapDrawable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -19,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,7 +45,6 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAdd
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
@@ -48,19 +63,8 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,6 +73,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,8 +81,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,17 +92,23 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.media3.common.Player
+import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.music.MusicPlayerUiState
 import com.ruchitech.carlanuchertab.music.MusicScanStatus
 import com.ruchitech.carlanuchertab.music.MusicSettingsEntity
 import com.ruchitech.carlanuchertab.music.MusicTrackEntity
 import com.ruchitech.carlanuchertab.music.MusicViewModel
-import androidx.media3.common.Player
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 
 enum class MusicPlayerStyle {
     /** Full card — home screen inside [HomeGlassPanel]. */
@@ -118,12 +131,22 @@ private object MusicPalette {
     val ControlFillActive = Color(0xFF2A3D52)
 }
 
+data class MusicThemeState(
+    val accent: Color = MusicPalette.Accent,
+    val accentDim: Color = MusicPalette.AccentDim,
+    val cardTop: Color = MusicPalette.CardTop,
+    val cardBottom: Color = MusicPalette.CardBottom
+)
+
+val LocalMusicTheme = staticCompositionLocalOf { MusicThemeState() }
+
 @Composable
 fun MusicUi(
     modifier: Modifier = Modifier,
     viewModel: MusicViewModel = hiltViewModel(),
     onOpenLibrary: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
@@ -135,68 +158,133 @@ fun MusicUi(
     val isCurrentTrackLiked = currentTrack != null && likedTracks.any { it.uri == currentTrack.uri }
     var showQueueSheet by remember { mutableStateOf(false) }
 
-    MusicPlayerPanel(
-        modifier = modifier,
-        style = MusicPlayerStyle.HomeGlass,
-        settings = settings,
-        playerState = playerState,
-        allowDelete = false,
-        isCurrentTrackLiked = isCurrentTrackLiked,
-        onTogglePlayback = viewModel::togglePlayback,
-        onSeekTo = viewModel::seekTo,
-        onSkipNext = viewModel::skipNext,
-        onSkipPrevious = viewModel::skipPrevious,
-        onDelete = {},
-        onOpenLibrary = onOpenLibrary,
-        onToggleLike = viewModel::toggleLikeCurrentTrack,
-        onAddToPlaylist = { showAddToPlaylistDialog = true },
-        onToggleShuffle = viewModel::toggleShuffle,
-        onCycleRepeat = viewModel::cycleRepeatMode,
-        onOpenQueue = { showQueueSheet = true },
-    )
+    // Dynamic Theme State
+    var rawTheme by remember { mutableStateOf(MusicThemeState()) }
+    
+    LaunchedEffect(currentTrack?.artworkPath) {
+        val path = currentTrack?.artworkPath
+        if (path.isNullOrBlank()) {
+            rawTheme = MusicThemeState()
+            return@LaunchedEffect
+        }
 
-    MusicQueueBottomSheet(
-        visible = showQueueSheet,
-        onDismiss = { showQueueSheet = false },
-        playerState = playerState,
-        onCrossfadeChange = viewModel::setCrossfadeEnabled,
-        onMoveQueueItem = viewModel::moveQueueItem,
-        onRemoveQueueItem = viewModel::removeQueueItem,
-        onClearQueue = {
-            viewModel.clearQueue()
-            showQueueSheet = false
-        },
-        onPlayQueueIndex = viewModel::playQueueIndex,
-    )
+        withContext(Dispatchers.IO) {
+            val loader = context.imageLoader
+            val request = ImageRequest.Builder(context)
+                .data(File(path))
+                .allowHardware(false) // Required for Palette
+                .build()
+            
+            val result = loader.execute(request)
+            if (result is SuccessResult) {
+                val bitmap = (result.drawable as BitmapDrawable).bitmap
+                val palette = Palette.from(bitmap).generate()
+                
+                // Extract colors with reasonable fallbacks
+                val accentColor = palette.getVibrantColor(
+                    palette.getLightVibrantColor(
+                        palette.getMutedColor(MusicPalette.Accent.toArgb())
+                    )
+                )
+                val accentDimColor = palette.getDarkVibrantColor(
+                    palette.getDarkMutedColor(MusicPalette.AccentDim.toArgb())
+                )
+                val dominantColor = palette.getDominantColor(MusicPalette.CardTop.toArgb())
+                
+                // Helper to darken colors for background
+                fun darken(color: Int, factor: Float): Color {
+                    val hsv = FloatArray(3)
+                    android.graphics.Color.colorToHSV(color, hsv)
+                    hsv[2] *= factor
+                    return Color(android.graphics.Color.HSVToColor(hsv))
+                }
 
-    if (showAddToPlaylistDialog && currentTrack != null) {
-        MusicAddToPlaylistDialog(
-            trackTitle = currentTrack.title,
-            playlists = playlists,
-            onDismiss = { showAddToPlaylistDialog = false },
-            onSelectPlaylist = { playlist ->
-                viewModel.addTrackToPlaylist(playlist.id, currentTrack.uri)
-                showAddToPlaylistDialog = false
-            },
-            onCreatePlaylist = {
-                showAddToPlaylistDialog = false
-                showCreatePlaylistDialog = true
+                val newTheme = MusicThemeState(
+                    accent = Color(accentColor),
+                    accentDim = Color(accentDimColor),
+                    cardTop = darken(dominantColor, 0.25f),
+                    cardBottom = darken(dominantColor, 0.15f)
+                )
+                
+                withContext(Dispatchers.Main) {
+                    rawTheme = newTheme
+                }
             }
-        )
+        }
     }
 
-    if (showCreatePlaylistDialog) {
-        MusicTextInputDialog(
-            title = "New playlist",
-            initialValue = "",
-            fieldLabel = "Name",
-            confirmLabel = "Create",
-            onDismiss = { showCreatePlaylistDialog = false },
-            onConfirm = { name ->
-                showCreatePlaylistDialog = false
-                viewModel.createPlaylist(name)
-            }
+    // Animated theme colors for smooth transition
+    val theme = MusicThemeState(
+        accent = animateColorAsState(rawTheme.accent, label = "accent").value,
+        accentDim = animateColorAsState(rawTheme.accentDim, label = "accentDim").value,
+        cardTop = animateColorAsState(rawTheme.cardTop, label = "cardTop").value,
+        cardBottom = animateColorAsState(rawTheme.cardBottom, label = "cardBottom").value
+    )
+
+    CompositionLocalProvider(LocalMusicTheme provides theme) {
+        MusicPlayerPanel(
+            modifier = modifier,
+            style = MusicPlayerStyle.HomeGlass,
+            settings = settings,
+            playerState = playerState,
+            allowDelete = false,
+            isCurrentTrackLiked = isCurrentTrackLiked,
+            onTogglePlayback = viewModel::togglePlayback,
+            onSeekTo = viewModel::seekTo,
+            onSkipNext = viewModel::skipNext,
+            onSkipPrevious = viewModel::skipPrevious,
+            onDelete = {},
+            onOpenLibrary = onOpenLibrary,
+            onToggleLike = viewModel::toggleLikeCurrentTrack,
+            onAddToPlaylist = { showAddToPlaylistDialog = true },
+            onToggleShuffle = viewModel::toggleShuffle,
+            onCycleRepeat = viewModel::cycleRepeatMode,
+            onOpenQueue = { showQueueSheet = true },
         )
+
+        MusicQueueBottomSheet(
+            visible = showQueueSheet,
+            onDismiss = { showQueueSheet = false },
+            playerState = playerState,
+            onCrossfadeChange = viewModel::setCrossfadeEnabled,
+            onMoveQueueItem = viewModel::moveQueueItem,
+            onRemoveQueueItem = viewModel::removeQueueItem,
+            onClearQueue = {
+                viewModel.clearQueue()
+                showQueueSheet = false
+            },
+            onPlayQueueIndex = viewModel::playQueueIndex,
+        )
+
+        if (showAddToPlaylistDialog && currentTrack != null) {
+            MusicAddToPlaylistDialog(
+                trackTitle = currentTrack.title,
+                playlists = playlists,
+                onDismiss = { showAddToPlaylistDialog = false },
+                onSelectPlaylist = { playlist ->
+                    viewModel.addTrackToPlaylist(playlist.id, currentTrack.uri)
+                    showAddToPlaylistDialog = false
+                },
+                onCreatePlaylist = {
+                    showAddToPlaylistDialog = false
+                    showCreatePlaylistDialog = true
+                }
+            )
+        }
+
+        if (showCreatePlaylistDialog) {
+            MusicTextInputDialog(
+                title = "New playlist",
+                initialValue = "",
+                fieldLabel = "Name",
+                confirmLabel = "Create",
+                onDismiss = { showCreatePlaylistDialog = false },
+                onConfirm = { name ->
+                    showCreatePlaylistDialog = false
+                    viewModel.createPlaylist(name)
+                }
+            )
+        }
     }
 }
 
@@ -220,6 +308,7 @@ fun MusicPlayerPanel(
     onCycleRepeat: () -> Unit = {},
     onOpenQueue: () -> Unit = {},
 ) {
+    val theme = LocalMusicTheme.current
     val isHomeGlass = style == MusicPlayerStyle.HomeGlass
     val isCompact = style == MusicPlayerStyle.Compact || isHomeGlass
     val cardShape = RoundedCornerShape(if (isCompact) 22.dp else 24.dp)
@@ -243,7 +332,7 @@ fun MusicPlayerPanel(
             .clip(cardShape)
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(MusicPalette.CardTop, MusicPalette.CardBottom)
+                    colors = listOf(theme.cardTop, theme.cardBottom)
                 )
             )
             .border(1.dp, MusicPalette.GlassBorder, cardShape)
@@ -519,6 +608,7 @@ private fun HorizontalNowPlayingLayout(
     onOpenQueue: () -> Unit,
     dragModifier: Modifier,
 ) {
+    val theme = LocalMusicTheme.current
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -527,7 +617,7 @@ private fun HorizontalNowPlayingLayout(
         val contentGap = if (compact) 14.dp else 18.dp
         val sectionGap = if (compact) 10.dp else 14.dp
         val artSize = if (compact) {
-            minOf(maxHeight * 0.48f, maxWidth * 0.34f).coerceIn(112.dp, 154.dp)
+            minOf(maxHeight * 0.58f, maxWidth * 0.36f).coerceIn(118.dp, 160.dp)
         } else {
             minOf(maxHeight * 0.56f, maxWidth * 0.38f).coerceIn(176.dp, 256.dp)
         }
@@ -548,7 +638,7 @@ private fun HorizontalNowPlayingLayout(
                 if (headerText != null) {
                     Text(
                         text = headerText,
-                        color = MusicPalette.Accent,
+                        color = theme.accent,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.2.sp,
@@ -614,7 +704,6 @@ private fun HorizontalNowPlayingLayout(
                 onCycleRepeat = onCycleRepeat,
                 onOpenQueue = onOpenQueue,
             )
-
             PlayerControlsRow(
                 isPlaying = playerState.isPlaying,
                 onPrevious = onSkipPrevious,
@@ -640,6 +729,7 @@ private fun InlinePlaybackTransport(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val theme = LocalMusicTheme.current
     val iconSize = if (compact) 18.dp else 20.dp
     val btnSize = if (compact) 32.dp else 36.dp
     Row(
@@ -651,7 +741,7 @@ private fun InlinePlaybackTransport(
             Icon(
                 imageVector = Icons.Default.Shuffle,
                 contentDescription = "Shuffle",
-                tint = if (shuffleEnabled) MusicPalette.Accent else MusicPalette.TextSecondary,
+                tint = if (shuffleEnabled) theme.accent else MusicPalette.TextSecondary,
                 modifier = Modifier.size(iconSize)
             )
         }
@@ -664,7 +754,7 @@ private fun InlinePlaybackTransport(
                     Icons.Default.Repeat
                 },
                 contentDescription = "Repeat",
-                tint = if (active) MusicPalette.Accent else MusicPalette.TextSecondary.copy(alpha = 0.45f),
+                tint = if (active) theme.accent else MusicPalette.TextSecondary.copy(alpha = 0.45f),
                 modifier = Modifier.size(iconSize)
             )
         }
@@ -692,6 +782,7 @@ fun MusicQueueBottomSheet(
     onPlayQueueIndex: (index: Int) -> Unit,
 ) {
     if (!visible) return
+    val theme = LocalMusicTheme.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val queue = playerState.currentQueue
     val cur = playerState.currentIndex
@@ -723,7 +814,7 @@ fun MusicQueueBottomSheet(
                     onClick = onClearQueue,
                     enabled = queue.isNotEmpty()
                 ) {
-                    Text("Clear", color = MusicPalette.Accent)
+                    Text("Clear", color = theme.accent)
                 }
             }
             Row(
@@ -736,8 +827,8 @@ fun MusicQueueBottomSheet(
                     checked = playerState.crossfadeMs > 0,
                     onCheckedChange = onCrossfadeChange,
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = MusicPalette.Accent,
-                        checkedTrackColor = MusicPalette.Accent.copy(alpha = 0.35f)
+                        checkedThumbColor = theme.accent,
+                        checkedTrackColor = theme.accent.copy(alpha = 0.35f)
                     )
                 )
             }
@@ -758,7 +849,7 @@ fun MusicQueueBottomSheet(
                         item {
                             Text(
                                 "Now playing",
-                                color = MusicPalette.Accent,
+                                color = theme.accent,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(bottom = 4.dp)
@@ -782,7 +873,7 @@ fun MusicQueueBottomSheet(
                         item {
                             Text(
                                 "Up next",
-                                color = MusicPalette.Accent,
+                                color = theme.accent,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
@@ -880,6 +971,7 @@ private fun PlayerTopActions(
     onDelete: () -> Unit,
     onOpenLibrary: () -> Unit,
 ) {
+    val theme = LocalMusicTheme.current
     Row(
         horizontalArrangement = Arrangement.spacedBy(0.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -902,7 +994,7 @@ private fun PlayerTopActions(
             Icon(
                 imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                 contentDescription = if (isLiked) "Unlike" else "Like",
-                tint = if (isLiked) MusicPalette.Accent else MusicPalette.TextSecondary,
+                tint = if (isLiked) theme.accent else MusicPalette.TextSecondary,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -974,10 +1066,11 @@ private fun TrackMetadata(
                 color = MusicPalette.TextPrimary,
                 style = titleStyle,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = if (compact) 2 else 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
                 textAlign = if (centered) TextAlign.Center else TextAlign.Start,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .basicMarquee()
             )
             Spacer(modifier = Modifier.height(if (compact) 4.dp else 6.dp))
             Text(
@@ -985,19 +1078,20 @@ private fun TrackMetadata(
                 color = MusicPalette.TextSecondary,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 textAlign = if (centered) TextAlign.Center else TextAlign.Start,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .basicMarquee()
             )
-            if (!compact) {
-                Spacer(modifier = Modifier.height(6.dp))
+            /*if (!compact) {
+                Spacer(modifier = Modifier.height(6.dp))*/
                 CyclingAlbumGenre(
                     album = meta.album,
                     genre = meta.genre,
                     trackUri = meta.uri,
                     centered = centered,
                 )
-            }
+            //}
         }
     }
 }
@@ -1122,6 +1216,7 @@ private fun MusicControlButton(
     primary: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val theme = LocalMusicTheme.current
     val shape = CircleShape
     Box(
         modifier = modifier
@@ -1131,7 +1226,7 @@ private fun MusicControlButton(
                 if (primary) {
                     Modifier.background(
                         Brush.linearGradient(
-                            colors = listOf(MusicPalette.AccentDim, MusicPalette.Accent)
+                            colors = listOf(theme.accentDim, theme.accent)
                         )
                     )
                 } else {
@@ -1155,6 +1250,7 @@ private fun EmptyMusicState(
     actionLabel: String,
     onAction: () -> Unit,
 ) {
+    val theme = LocalMusicTheme.current
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1171,7 +1267,7 @@ private fun EmptyMusicState(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                 contentDescription = null,
-                tint = MusicPalette.Accent,
+                tint = theme.accent,
                 modifier = Modifier.size(if (style == MusicPlayerStyle.Compact) 36.dp else 44.dp)
             )
         }
@@ -1197,7 +1293,7 @@ private fun EmptyMusicState(
         )
         Spacer(modifier = Modifier.height(16.dp))
         TextButton(onClick = onAction) {
-            Text(actionLabel, color = MusicPalette.Accent, fontWeight = FontWeight.SemiBold)
+            Text(actionLabel, color = theme.accent, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -1214,14 +1310,15 @@ private fun PlaybackSlider(
     onCycleRepeat: () -> Unit,
     onOpenQueue: () -> Unit,
 ) {
+    val theme = LocalMusicTheme.current
     var sliderPosition by remember(progressMs, durationMs) {
         mutableFloatStateOf(progressMs.coerceAtMost(durationMs).toFloat())
     }
     var isDragging by remember { mutableStateOf(false) }
 
     val sliderColors = SliderDefaults.colors(
-        thumbColor = MusicPalette.Accent,
-        activeTrackColor = MusicPalette.Accent,
+        thumbColor = theme.accent,
+        activeTrackColor = theme.accent,
         inactiveTrackColor = Color.White.copy(alpha = 0.14f)
     )
     val timeStyle = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium
