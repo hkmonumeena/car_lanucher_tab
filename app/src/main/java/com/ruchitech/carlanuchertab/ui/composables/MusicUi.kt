@@ -712,11 +712,11 @@ private fun HorizontalNowPlayingLayout(
                 onPrevious = onSkipPrevious,
                 onTogglePlayback = onTogglePlayback,
                 onNext = onSkipNext,
-                playButtonSize = if (compact) 72.dp else 84.dp,
-                sideButtonSize = if (compact) 56.dp else 64.dp,
-                playIconSize = if (compact) 40.dp else 48.dp,
-                sideIconSize = if (compact) 32.dp else 36.dp,
-                buttonSpacing = if (compact) 20.dp else 32.dp
+                playButtonSize = if (compact) 96.dp else 112.dp,
+                sideButtonSize = if (compact) 72.dp else 84.dp,
+                playIconSize = if (compact) 56.dp else 64.dp,
+                sideIconSize = if (compact) 42.dp else 48.dp,
+                buttonSpacing = if (compact) 28.dp else 40.dp
             )
         }
     }
