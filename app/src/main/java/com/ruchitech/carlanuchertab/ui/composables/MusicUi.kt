@@ -617,9 +617,9 @@ private fun HorizontalNowPlayingLayout(
         val contentGap = if (compact) 14.dp else 18.dp
         val sectionGap = if (compact) 10.dp else 14.dp
         val artSize = if (compact) {
-            minOf(maxHeight * 0.58f, maxWidth * 0.36f).coerceIn(118.dp, 160.dp)
+            minOf(maxHeight * 0.70f, maxWidth * 0.40f).coerceIn(140.dp, 200.dp)
         } else {
-            minOf(maxHeight * 0.56f, maxWidth * 0.38f).coerceIn(176.dp, 256.dp)
+            minOf(maxHeight * 0.65f, maxWidth * 0.40f).coerceIn(200.dp, 280.dp)
         }
         val titleStyle = if (compact) {
             MaterialTheme.typography.titleLarge
@@ -669,7 +669,10 @@ private fun HorizontalNowPlayingLayout(
                 MusicAlbumArtwork(
                     artworkPath = track.artworkPath,
                     title = track.title,
-                    modifier = Modifier.size(artSize),
+                    modifier = Modifier
+                        .size(artSize)
+                        .clip(RoundedCornerShape(if (compact) 18.dp else 22.dp))
+                        .clickable { onTogglePlayback() },
                     cornerRadius = if (compact) 18.dp else 22.dp,
                     pulseWhenPlaying = compact,
                     isPlaying = playerState.isPlaying
@@ -709,11 +712,11 @@ private fun HorizontalNowPlayingLayout(
                 onPrevious = onSkipPrevious,
                 onTogglePlayback = onTogglePlayback,
                 onNext = onSkipNext,
-                playButtonSize = if (compact) 56.dp else 62.dp,
-                sideButtonSize = if (compact) 40.dp else 48.dp,
-                playIconSize = if (compact) 30.dp else 32.dp,
-                sideIconSize = if (compact) 22.dp else 26.dp,
-                buttonSpacing = if (compact) 14.dp else 24.dp
+                playButtonSize = if (compact) 72.dp else 84.dp,
+                sideButtonSize = if (compact) 56.dp else 64.dp,
+                playIconSize = if (compact) 40.dp else 48.dp,
+                sideIconSize = if (compact) 32.dp else 36.dp,
+                buttonSpacing = if (compact) 20.dp else 32.dp
             )
         }
     }
