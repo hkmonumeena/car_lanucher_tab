@@ -23,6 +23,31 @@ object MusicScanStatus {
     const val ERROR = "ERROR"
 }
 
+enum class MusicSoundPreset(val label: String) {
+    Balanced("Balanced"),
+    BassBoost("Bass Boost"),
+    Vocal("Vocal"),
+    Night("Night"),
+    Wide("Wide"),
+}
+
+data class MusicSoundControlState(
+    val preset: MusicSoundPreset = MusicSoundPreset.Balanced,
+    /** -1.0 to 1.0, mapped to available Equalizer band range. */
+    val bass: Float = 0f,
+    /** -1.0 to 1.0, mapped to available Equalizer band range. */
+    val treble: Float = 0f,
+    /** -1.0 to 1.0, positive values mapped to LoudnessEnhancer gain. */
+    val loudness: Float = 0f,
+    /** -1.0 = left, 1.0 = right. Stored for the cabin focus pad. */
+    val soundZoneX: Float = 0f,
+    /** -1.0 = front, 1.0 = back. Stored for the cabin focus pad. */
+    val soundZoneY: Float = 0f,
+    val effectsAvailable: Boolean = true,
+    val cabinControlAvailable: Boolean = false,
+    val limitationMessage: String? = null,
+)
+
 @Entity(
     tableName = "music_tracks",
     indices = [

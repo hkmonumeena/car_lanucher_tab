@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -40,12 +41,18 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
@@ -83,6 +90,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -103,18 +111,25 @@ import com.ruchitech.carlanuchertab.helper.NavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
 import com.ruchitech.carlanuchertab.music.MusicViewModel
+import com.ruchitech.carlanuchertab.music.GenreSummary
+import com.ruchitech.carlanuchertab.music.MusicTrackEntity
 import com.ruchitech.carlanuchertab.rememberVehicleLocationState
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import com.ruchitech.carlanuchertab.roomdb.data.FuelQuickFillHints
 import com.ruchitech.carlanuchertab.ui.composables.FuelLogDialog
+import com.ruchitech.carlanuchertab.ui.composables.CockpitControlChip
+import com.ruchitech.carlanuchertab.ui.composables.CockpitPalette
+import com.ruchitech.carlanuchertab.ui.composables.CockpitSectionHeader
 import com.ruchitech.carlanuchertab.ui.composables.HomeBottomIcons
 import com.ruchitech.carlanuchertab.ui.composables.HomeCinematicOverlay
 import com.ruchitech.carlanuchertab.ui.composables.HomeConnectionBadge
 import com.ruchitech.carlanuchertab.ui.composables.HomeDockPanel
 import com.ruchitech.carlanuchertab.ui.composables.HomeGlassPanel
 import com.ruchitech.carlanuchertab.ui.composables.ModalWallpaper
+import com.ruchitech.carlanuchertab.ui.composables.MusicAlbumArtwork
 import com.ruchitech.carlanuchertab.ui.composables.MusicUi
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
+import com.ruchitech.carlanuchertab.ui.composables.formatDuration
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.DashboardViewModel
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.FuelLogs
 import androidx.palette.graphics.Palette
@@ -154,6 +169,302 @@ fun DeleteConfirmationDialog(
     }
 }
 
+@Composable
+private fun ClockMusicPager(
+    tracks: List<MusicTrackEntity>,
+    genres: List<GenreSummary>,
+    likedTracks: List<MusicTrackEntity>,
+    recentlyPlayed: List<MusicTrackEntity>,
+    mostPlayed: List<MusicTrackEntity>,
+    currentTrack: MusicTrackEntity?,
+    isPlaying: Boolean,
+    onResume: () -> Unit,
+    onPlayAll: (MusicTrackEntity) -> Unit,
+    onPlayLiked: (MusicTrackEntity) -> Unit,
+    onPlayRecent: (MusicTrackEntity) -> Unit,
+    onPlayMost: (MusicTrackEntity) -> Unit,
+    onPlayGenre: (String, MusicTrackEntity) -> Unit,
+) {
+    val pagerState = rememberPagerState(pageCount = { 2 })
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            when (page) {
+                0 -> Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ShowAnalogClock(
+                        modifier = Modifier.wrapContentSize(),
+                        compact = true
+                    )
+                }
+
+                else -> CompactHomeSongBrowser(
+                    tracks = tracks,
+                    genres = genres,
+                    likedTracks = likedTracks,
+                    recentlyPlayed = recentlyPlayed,
+                    mostPlayed = mostPlayed,
+                    currentTrack = currentTrack,
+                    isPlaying = isPlaying,
+                    onResume = onResume,
+                    onPlayAll = onPlayAll,
+                    onPlayLiked = onPlayLiked,
+                    onPlayRecent = onPlayRecent,
+                    onPlayMost = onPlayMost,
+                    onPlayGenre = onPlayGenre
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(2) { index ->
+                Box(
+                    modifier = Modifier
+                        .size(if (pagerState.currentPage == index) 7.dp else 5.dp)
+                        .background(
+                            if (pagerState.currentPage == index) CockpitPalette.Accent
+                            else Color.White.copy(alpha = 0.32f),
+                            CircleShape
+                        )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactHomeSongBrowser(
+    tracks: List<MusicTrackEntity>,
+    genres: List<GenreSummary>,
+    likedTracks: List<MusicTrackEntity>,
+    recentlyPlayed: List<MusicTrackEntity>,
+    mostPlayed: List<MusicTrackEntity>,
+    currentTrack: MusicTrackEntity?,
+    isPlaying: Boolean,
+    onResume: () -> Unit,
+    onPlayAll: (MusicTrackEntity) -> Unit,
+    onPlayLiked: (MusicTrackEntity) -> Unit,
+    onPlayRecent: (MusicTrackEntity) -> Unit,
+    onPlayMost: (MusicTrackEntity) -> Unit,
+    onPlayGenre: (String, MusicTrackEntity) -> Unit,
+) {
+    var selectedFilter by remember { mutableStateOf("Recent") }
+    val selectedGenre = genres.firstOrNull { it.genre == selectedFilter }?.genre
+    val visibleTracks = remember(tracks, likedTracks, recentlyPlayed, mostPlayed, selectedFilter) {
+        when {
+            selectedFilter == "Liked" -> likedTracks
+            selectedFilter == "Recent" -> recentlyPlayed.ifEmpty { tracks }
+            selectedFilter == "Most" -> mostPlayed.ifEmpty { tracks }
+            selectedGenre != null -> tracks.filter { it.genre == selectedGenre }
+            else -> tracks
+        }.take(8)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 22.dp)
+    ) {
+        CockpitSectionHeader(title = "Quick Music")
+        currentTrack?.let { track ->
+            HomeResumeCard(
+                track = track,
+                isPlaying = isPlaying,
+                onClick = onResume
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            item {
+                CockpitControlChip(
+                    label = "Recent",
+                    selected = selectedFilter == "Recent",
+                    onClick = { selectedFilter = "Recent" }
+                )
+            }
+            item {
+                CockpitControlChip(
+                    label = "Most",
+                    selected = selectedFilter == "Most",
+                    onClick = { selectedFilter = "Most" }
+                )
+            }
+            item {
+                CockpitControlChip(
+                    label = "All",
+                    selected = selectedFilter == "All",
+                    onClick = { selectedFilter = "All" }
+                )
+            }
+            item {
+                CockpitControlChip(
+                    label = "Liked",
+                    selected = selectedFilter == "Liked",
+                    onClick = { selectedFilter = "Liked" }
+                )
+            }
+            items(genres, key = { it.genre }) { genre ->
+                CockpitControlChip(
+                    label = genre.genre,
+                    selected = selectedFilter == genre.genre,
+                    onClick = { selectedFilter = genre.genre }
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        if (visibleTracks.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No songs",
+                    color = CockpitPalette.TextMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                items(visibleTracks, key = { it.uri }) { track ->
+                    CompactHomeSongRow(
+                        track = track,
+                        onClick = {
+                            when {
+                                selectedFilter == "Liked" -> onPlayLiked(track)
+                                selectedFilter == "Recent" -> onPlayRecent(track)
+                                selectedFilter == "Most" -> onPlayMost(track)
+                                selectedGenre != null -> onPlayGenre(selectedGenre, track)
+                                else -> onPlayAll(track)
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeResumeCard(
+    track: MusicTrackEntity,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CockpitPalette.Accent.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+            .border(1.dp, CockpitPalette.BorderStrong, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MusicAlbumArtwork(
+            artworkPath = track.artworkPath,
+            title = track.title,
+            modifier = Modifier.size(44.dp),
+            cornerRadius = 8.dp
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (isPlaying) "Now playing" else "Resume",
+                color = CockpitPalette.Accent,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = track.title,
+                color = CockpitPalette.TextPrimary,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            imageVector = Icons.Default.PlayArrow,
+            contentDescription = null,
+            tint = CockpitPalette.Accent,
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
+@Composable
+private fun CompactHomeSongRow(
+    track: MusicTrackEntity,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CockpitPalette.SurfaceRaised.copy(alpha = 0.82f), RoundedCornerShape(10.dp))
+            .border(1.dp, CockpitPalette.Border, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MusicAlbumArtwork(
+            artworkPath = track.artworkPath,
+            title = track.title,
+            modifier = Modifier.size(38.dp),
+            cornerRadius = 8.dp
+        )
+        Spacer(modifier = Modifier.width(9.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                color = CockpitPalette.TextPrimary,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${track.artist} • ${track.album}",
+                color = CockpitPalette.TextMuted,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = formatDuration(track.durationMs),
+            color = CockpitPalette.TextMuted,
+            style = MaterialTheme.typography.labelSmall
+        )
+        Icon(
+            imageVector = Icons.Default.PlayArrow,
+            contentDescription = null,
+            tint = CockpitPalette.Accent,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
 
 @Composable
 fun HomeScreen(
@@ -164,6 +475,11 @@ fun HomeScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState
     val musicPlayerState by musicViewModel.playerState.collectAsState()
+    val homeTracks by musicViewModel.tracks.collectAsState()
+    val homeGenres by musicViewModel.genres.collectAsState()
+    val homeLikedTracks by musicViewModel.likedTracks.collectAsState()
+    val homeRecentlyPlayed by musicViewModel.recentlyPlayedTracks.collectAsState()
+    val homeMostPlayed by musicViewModel.mostPlayedTracks.collectAsState()
     val fuelLogs by viewModel.fuelLogs.collectAsState()
     val fuelQuickFillHints = remember(fuelLogs) {
         val last = fuelLogs.firstOrNull()
@@ -368,17 +684,23 @@ fun HomeScreen(
                             .weight(1f)
                             .fillMaxWidth()
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ShowAnalogClock(
-                                modifier = Modifier.wrapContentSize(),
-                                compact = true
-                            )
-                        }
+                        ClockMusicPager(
+                            tracks = homeTracks,
+                            genres = homeGenres,
+                            likedTracks = homeLikedTracks,
+                            recentlyPlayed = homeRecentlyPlayed,
+                            mostPlayed = homeMostPlayed,
+                            currentTrack = musicPlayerState.currentTrack,
+                            isPlaying = musicPlayerState.isPlaying,
+                            onResume = musicViewModel::togglePlayback,
+                            onPlayAll = { musicViewModel.playAllSongs(it.uri) },
+                            onPlayLiked = { musicViewModel.playLikedSongs(it.uri) },
+                            onPlayRecent = { musicViewModel.playRecentlyPlayed(it.uri) },
+                            onPlayMost = { musicViewModel.playMostPlayed(it.uri) },
+                            onPlayGenre = { genre, track ->
+                                musicViewModel.playGenre(genre, track.uri)
+                            }
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -394,7 +716,7 @@ fun HomeScreen(
                                 onClick = { bottomNavItem ->
                                     when (bottomNavItem) {
                                         NavItem.AllApps -> onNavigated(bottomNavItem)
-                                        NavItem.Fuel -> viewModel.showFuelLogsModal()
+                                        NavItem.Fuel -> onNavigated(bottomNavItem)
                                         NavItem.Map -> {}
                                         NavItem.Music -> onNavigated(bottomNavItem)
                                         NavItem.Radio -> {

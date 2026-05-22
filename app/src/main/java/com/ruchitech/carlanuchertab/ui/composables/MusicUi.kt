@@ -18,7 +18,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,6 +38,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,6 +46,7 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAdd
@@ -80,6 +85,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -102,6 +108,8 @@ import com.ruchitech.carlanuchertab.R
 import com.ruchitech.carlanuchertab.music.MusicPlayerUiState
 import com.ruchitech.carlanuchertab.music.MusicScanStatus
 import com.ruchitech.carlanuchertab.music.MusicSettingsEntity
+import com.ruchitech.carlanuchertab.music.MusicSoundControlState
+import com.ruchitech.carlanuchertab.music.MusicSoundPreset
 import com.ruchitech.carlanuchertab.music.MusicTrackEntity
 import com.ruchitech.carlanuchertab.music.MusicViewModel
 import java.io.File
@@ -118,17 +126,17 @@ enum class MusicPlayerStyle {
 }
 
 private object MusicPalette {
-    val CardTop = Color(0xFF101820)
-    val CardBottom = Color(0xFF1A2836)
-    val ArtBackdrop = Color(0xFF0A0F14)
-    val Accent = Color(0xFF5CE1E6)
-    val AccentDim = Color(0xFF3A9EA3)
-    val TextPrimary = Color(0xFFF4F7FA)
-    val TextSecondary = Color(0xB3F4F7FA)
-    val TextMuted = Color(0x80F4F7FA)
-    val GlassBorder = Color(0x24FFFFFF)
-    val ControlFill = Color(0x18FFFFFF)
-    val ControlFillActive = Color(0xFF2A3D52)
+    val CardTop = CockpitPalette.SurfaceTop
+    val CardBottom = CockpitPalette.SurfaceBottom
+    val ArtBackdrop = CockpitPalette.BackgroundTop
+    val Accent = CockpitPalette.Accent
+    val AccentDim = CockpitPalette.AccentSoft
+    val TextPrimary = CockpitPalette.TextPrimary
+    val TextSecondary = CockpitPalette.TextSecondary
+    val TextMuted = CockpitPalette.TextMuted
+    val GlassBorder = CockpitPalette.Border
+    val ControlFill = Color.White.copy(alpha = 0.075f)
+    val ControlFillActive = CockpitPalette.SurfacePressed
 }
 
 data class MusicThemeState(
@@ -149,6 +157,7 @@ fun MusicUi(
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
+    val soundControlState by viewModel.soundControlState.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val likedTracks by viewModel.likedTracks.collectAsState()
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
@@ -157,6 +166,7 @@ fun MusicUi(
     val currentTrack = playerState.currentTrack
     val isCurrentTrackLiked = currentTrack != null && likedTracks.any { it.uri == currentTrack.uri }
     var showQueueSheet by remember { mutableStateOf(false) }
+    var showSoundControlSheet by remember { mutableStateOf(false) }
 
     // Dynamic Theme State
     var rawTheme by remember { mutableStateOf(MusicThemeState()) }
@@ -240,6 +250,7 @@ fun MusicUi(
             onToggleShuffle = viewModel::toggleShuffle,
             onCycleRepeat = viewModel::cycleRepeatMode,
             onOpenQueue = { showQueueSheet = true },
+            onOpenSoundControl = { showSoundControlSheet = true },
         )
 
         MusicQueueBottomSheet(
@@ -254,6 +265,18 @@ fun MusicUi(
                 showQueueSheet = false
             },
             onPlayQueueIndex = viewModel::playQueueIndex,
+        )
+
+        MusicSoundControlBottomSheet(
+            visible = showSoundControlSheet,
+            onDismiss = { showSoundControlSheet = false },
+            state = soundControlState,
+            onPreset = viewModel::setSoundPreset,
+            onBassChange = viewModel::setBassLevel,
+            onTrebleChange = viewModel::setTrebleLevel,
+            onLoudnessChange = viewModel::setLoudnessLevel,
+            onSoundZoneChange = viewModel::setSoundZone,
+            onReset = viewModel::resetSoundControl,
         )
 
         if (showAddToPlaylistDialog && currentTrack != null) {
@@ -307,6 +330,7 @@ fun MusicPlayerPanel(
     onToggleShuffle: () -> Unit = {},
     onCycleRepeat: () -> Unit = {},
     onOpenQueue: () -> Unit = {},
+    onOpenSoundControl: () -> Unit = {},
 ) {
     val theme = LocalMusicTheme.current
     val isHomeGlass = style == MusicPlayerStyle.HomeGlass
@@ -391,6 +415,7 @@ fun MusicPlayerPanel(
                         onToggleShuffle = onToggleShuffle,
                         onCycleRepeat = onCycleRepeat,
                         onOpenQueue = onOpenQueue,
+                        onOpenSoundControl = onOpenSoundControl,
                         dragModifier = Modifier.pointerInput(track.uri) {
                             detectHorizontalDragGestures(
                                 onDragEnd = { dragDistance = 0f },
@@ -428,6 +453,7 @@ fun MusicPlayerPanel(
                         onToggleShuffle = onToggleShuffle,
                         onCycleRepeat = onCycleRepeat,
                         onOpenQueue = onOpenQueue,
+                        onOpenSoundControl = onOpenSoundControl,
                         dragModifier = Modifier.pointerInput(track.uri) {
                             detectHorizontalDragGestures(
                                 onDragEnd = { dragDistance = 0f },
@@ -520,6 +546,7 @@ private fun CompactNowPlaying(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenSoundControl: () -> Unit,
     dragModifier: Modifier,
 ) {
     HorizontalNowPlayingLayout(
@@ -541,6 +568,7 @@ private fun CompactNowPlaying(
         onToggleShuffle = onToggleShuffle,
         onCycleRepeat = onCycleRepeat,
         onOpenQueue = onOpenQueue,
+        onOpenSoundControl = onOpenSoundControl,
         dragModifier = dragModifier,
     )
 }
@@ -561,6 +589,7 @@ private fun ExpandedNowPlaying(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenSoundControl: () -> Unit,
     dragModifier: Modifier,
 ) {
     HorizontalNowPlayingLayout(
@@ -582,6 +611,7 @@ private fun ExpandedNowPlaying(
         onToggleShuffle = onToggleShuffle,
         onCycleRepeat = onCycleRepeat,
         onOpenQueue = onOpenQueue,
+        onOpenSoundControl = onOpenSoundControl,
         dragModifier = dragModifier,
     )
 }
@@ -606,6 +636,7 @@ private fun HorizontalNowPlayingLayout(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenSoundControl: () -> Unit,
     dragModifier: Modifier,
 ) {
     val theme = LocalMusicTheme.current
@@ -628,7 +659,24 @@ private fun HorizontalNowPlayingLayout(
         }
 
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(if (compact) 18.dp else 22.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            theme.accent.copy(alpha = if (compact) 0.16f else 0.18f),
+                            MusicPalette.ControlFillActive.copy(alpha = 0.86f),
+                            MusicPalette.CardBottom
+                        )
+                    )
+                )
+                .border(
+                    1.dp,
+                    theme.accent.copy(alpha = if (compact) 0.34f else 0.42f),
+                    RoundedCornerShape(if (compact) 18.dp else 22.dp)
+                )
+                .padding(if (compact) 12.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(sectionGap)
         ) {
             Row(
@@ -706,6 +754,7 @@ private fun HorizontalNowPlayingLayout(
                 onToggleShuffle = onToggleShuffle,
                 onCycleRepeat = onCycleRepeat,
                 onOpenQueue = onOpenQueue,
+                onOpenSoundControl = onOpenSoundControl,
             )
             PlayerControlsRow(
                 isPlaying = playerState.isPlaying,
@@ -729,6 +778,7 @@ private fun InlinePlaybackTransport(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenSoundControl: () -> Unit,
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -758,6 +808,14 @@ private fun InlinePlaybackTransport(
                 },
                 contentDescription = "Repeat",
                 tint = if (active) theme.accent else MusicPalette.TextSecondary.copy(alpha = 0.45f),
+                modifier = Modifier.size(iconSize)
+            )
+        }
+        IconButton(onClick = onOpenSoundControl, modifier = Modifier.size(btnSize)) {
+            Icon(
+                imageVector = Icons.Default.GraphicEq,
+                contentDescription = "Sound control",
+                tint = theme.accent.copy(alpha = 0.92f),
                 modifier = Modifier.size(iconSize)
             )
         }
@@ -904,6 +962,364 @@ fun MusicQueueBottomSheet(
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MusicSoundControlBottomSheet(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    state: MusicSoundControlState,
+    onPreset: (MusicSoundPreset) -> Unit,
+    onBassChange: (Float) -> Unit,
+    onTrebleChange: (Float) -> Unit,
+    onLoudnessChange: (Float) -> Unit,
+    onSoundZoneChange: (Float, Float) -> Unit,
+    onReset: () -> Unit,
+) {
+    if (!visible) return
+    val theme = LocalMusicTheme.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MusicPalette.CardBottom,
+        contentColor = MusicPalette.TextPrimary,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        "Sound Control",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MusicPalette.TextPrimary
+                    )
+                    Text(
+                        "Bass, treble, loudness and cabin focus",
+                        color = MusicPalette.TextMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                TextButton(onClick = onReset) {
+                    Text("Reset", color = theme.accent)
+                }
+            }
+
+            if (!state.effectsAvailable) {
+                Text(
+                    text = state.limitationMessage ?: "Sound effects are limited on this device.",
+                    color = CockpitPalette.Danger,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(CockpitPalette.Danger.copy(alpha = 0.10f))
+                        .border(1.dp, CockpitPalette.Danger.copy(alpha = 0.28f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Presets",
+                    color = theme.accent,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MusicSoundPreset.values().forEach { preset ->
+                        CockpitControlChip(
+                            label = preset.label,
+                            selected = state.preset == preset,
+                            onClick = { onPreset(preset) }
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MusicPalette.ControlFill)
+                    .border(1.dp, MusicPalette.GlassBorder, RoundedCornerShape(18.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SoundControlSlider(
+                    label = "Bass",
+                    value = state.bass,
+                    onValueChange = onBassChange
+                )
+                SoundControlSlider(
+                    label = "Treble",
+                    value = state.treble,
+                    onValueChange = onTrebleChange
+                )
+                SoundControlSlider(
+                    label = "Loudness",
+                    value = state.loudness,
+                    onValueChange = onLoudnessChange
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MusicPalette.ControlFill)
+                    .border(1.dp, MusicPalette.GlassBorder, RoundedCornerShape(18.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "Cabin Sound Zone",
+                            color = MusicPalette.TextPrimary,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "Drag the focus point toward the seat that needs more sound.",
+                            color = MusicPalette.TextMuted,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Text(
+                        if (state.cabinControlAvailable) "ACTIVE" else "DEVICE LIMITED",
+                        color = if (state.cabinControlAvailable) CockpitPalette.Success else CockpitPalette.TextMuted,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                CabinSoundZonePad(
+                    x = state.soundZoneX,
+                    y = state.soundZoneY,
+                    onChange = onSoundZoneChange,
+                )
+            }
+
+            Text(
+                "EQ changes apply immediately. Cabin front/back fader needs car-audio support; unsupported devices keep the focus point as a premium visual control.",
+                color = MusicPalette.TextMuted,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SoundControlSlider(
+    label: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+) {
+    val theme = LocalMusicTheme.current
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                color = MusicPalette.TextPrimary,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "${if (value >= 0f) "+" else ""}${(value * 100).toInt()}",
+                color = MusicPalette.TextMuted,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = -1f..1f,
+            colors = SliderDefaults.colors(
+                thumbColor = theme.accent,
+                activeTrackColor = theme.accent,
+                inactiveTrackColor = Color.White.copy(alpha = 0.14f)
+            )
+        )
+    }
+}
+
+@Composable
+private fun CabinSoundZonePad(
+    x: Float,
+    y: Float,
+    onChange: (Float, Float) -> Unit,
+) {
+    val theme = LocalMusicTheme.current
+    val frontLeft = zoneWeight(x, y, left = true, front = true)
+    val frontRight = zoneWeight(x, y, left = false, front = true)
+    val backLeft = zoneWeight(x, y, left = true, front = false)
+    val backRight = zoneWeight(x, y, left = false, front = false)
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(176.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        theme.accent.copy(alpha = 0.18f),
+                        CockpitPalette.SurfaceRaised.copy(alpha = 0.78f),
+                        CockpitPalette.BackgroundTop.copy(alpha = 0.92f)
+                    )
+                )
+            )
+            .border(1.dp, CockpitPalette.BorderStrong, RoundedCornerShape(16.dp))
+            .pointerInput(Unit) {
+                fun update(offset: Offset) {
+                    val nextX = ((offset.x / size.width) * 2f - 1f).coerceIn(-1f, 1f)
+                    val nextY = ((offset.y / size.height) * 2f - 1f).coerceIn(-1f, 1f)
+                    onChange(nextX, nextY)
+                }
+                detectDragGestures(
+                    onDragStart = ::update,
+                    onDrag = { change, _ ->
+                        update(change.position)
+                        change.consume()
+                    }
+                )
+            }
+            .padding(12.dp)
+    ) {
+        val knobSize = 34.dp
+        val padWidth = maxWidth
+        val padHeight = maxHeight
+        val maxKnobX = (padWidth - knobSize).coerceAtLeast(0.dp)
+        val maxKnobY = (padHeight - knobSize).coerceAtLeast(0.dp)
+        val knobX = padWidth * ((x + 1f) / 2f)
+        val knobY = padHeight * ((y + 1f) / 2f)
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(CockpitPalette.Border)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .width(1.dp)
+                    .height(132.dp)
+                    .background(CockpitPalette.Border)
+            )
+            ZoneCornerLabel(
+                title = "Front Left",
+                value = frontLeft,
+                modifier = Modifier.align(Alignment.TopStart)
+            )
+            ZoneCornerLabel(
+                title = "Front Right",
+                value = frontRight,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+            ZoneCornerLabel(
+                title = "Back Left",
+                value = backLeft,
+                modifier = Modifier.align(Alignment.BottomStart)
+            )
+            ZoneCornerLabel(
+                title = "Back Right",
+                value = backRight,
+                modifier = Modifier.align(Alignment.BottomEnd)
+            )
+            Box(
+                modifier = Modifier
+                    .padding(
+                        start = (knobX - knobSize / 2).coerceIn(0.dp, maxKnobX),
+                        top = (knobY - knobSize / 2).coerceIn(0.dp, maxKnobY)
+                    )
+                    .size(knobSize)
+                    .clip(CircleShape)
+                    .background(theme.accent)
+                    .border(3.dp, CockpitPalette.OnAccent.copy(alpha = 0.45f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(CockpitPalette.OnAccent)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoneCornerLabel(
+    title: String,
+    value: Int,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.Black.copy(alpha = 0.20f))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            title,
+            color = MusicPalette.TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1
+        )
+        Text(
+            "$value%",
+            color = MusicPalette.TextPrimary,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+private fun zoneWeight(
+    x: Float,
+    y: Float,
+    left: Boolean,
+    front: Boolean,
+): Int {
+    val horizontal = if (left) (1f - x) / 2f else (1f + x) / 2f
+    val vertical = if (front) (1f - y) / 2f else (1f + y) / 2f
+    return (horizontal * vertical * 100f).toInt().coerceIn(0, 100)
 }
 
 @Composable
@@ -1312,6 +1728,7 @@ private fun PlaybackSlider(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenSoundControl: () -> Unit,
 ) {
     val theme = LocalMusicTheme.current
     var sliderPosition by remember(progressMs, durationMs) {
@@ -1359,6 +1776,7 @@ private fun PlaybackSlider(
                 onToggleShuffle = onToggleShuffle,
                 onCycleRepeat = onCycleRepeat,
                 onOpenQueue = onOpenQueue,
+                onOpenSoundControl = onOpenSoundControl,
                 compact = compact,
                 modifier = Modifier.padding(horizontal = 2.dp)
             )

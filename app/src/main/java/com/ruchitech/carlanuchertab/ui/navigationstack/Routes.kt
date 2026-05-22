@@ -14,6 +14,9 @@ sealed class Screen {
     data object Music : Screen()
 
     @Serializable
+    data object Trips : Screen()
+
+    @Serializable
     data object Settings : Screen()
 
     @Serializable

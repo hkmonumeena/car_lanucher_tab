@@ -50,15 +50,15 @@ import com.ruchitech.carlanuchertab.music.PlaylistWithCount
 
 private object DialogPalette {
     val Scrim = Color(0xCC000000)
-    val SurfaceTop = Color(0xFF121A24)
-    val SurfaceBottom = Color(0xFF1C2836)
-    val Border = Color(0x44FFFFFF)
-    val Accent = Color(0xFF5CE1E6)
-    val TextPrimary = Color(0xFFF4F7FA)
-    val TextSecondary = Color(0xB3F4F7FA)
-    val TextMuted = Color(0x80F4F7FA)
-    val RowFill = Color(0xFF243040)
-    val Danger = Color(0xFFFF8A80)
+    val SurfaceTop = CockpitPalette.SurfaceTop
+    val SurfaceBottom = CockpitPalette.SurfaceBottom
+    val Border = CockpitPalette.Border
+    val Accent = CockpitPalette.Accent
+    val TextPrimary = CockpitPalette.TextPrimary
+    val TextSecondary = CockpitPalette.TextSecondary
+    val TextMuted = CockpitPalette.TextMuted
+    val RowFill = CockpitPalette.SurfaceRaised
+    val Danger = CockpitPalette.Danger
 }
 
 @Composable
@@ -254,13 +254,13 @@ private fun MusicDialogHost(
                     .padding(horizontal = 28.dp, vertical = 24.dp)
                     .widthIn(min = 300.dp, max = 440.dp)
                     .fillMaxWidth(0.72f)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(CockpitDimens.PanelRadius))
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(DialogPalette.SurfaceTop, DialogPalette.SurfaceBottom)
                         )
                     )
-                    .border(1.5.dp, DialogPalette.Border, RoundedCornerShape(16.dp))
+                    .border(1.dp, DialogPalette.Border, RoundedCornerShape(CockpitDimens.PanelRadius))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

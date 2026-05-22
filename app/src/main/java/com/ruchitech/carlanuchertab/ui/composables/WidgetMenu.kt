@@ -35,7 +35,7 @@ fun WidgetsDropdownMenu(
     modifier: Modifier = Modifier,
 ) {
     val menuItems = listOf(
-        MenuItem(
+    /*    MenuItem(
             text = "Add Widget",
             icon = Icons.Default.Add,
             action = WidgetMenuAction.AddWidget
@@ -44,7 +44,7 @@ fun WidgetsDropdownMenu(
             text = "Edit Widgets",
             icon = Icons.Default.Add,
             action = WidgetMenuAction.EditWidgets
-        ),
+        ),*/
         MenuItem(
             text = "Wallpapers",
             icon = Icons.Default.Edit,

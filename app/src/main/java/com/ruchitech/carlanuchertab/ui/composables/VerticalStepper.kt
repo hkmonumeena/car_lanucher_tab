@@ -5,6 +5,7 @@ import android.R.attr.maxLines
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.LocationOn
@@ -42,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -62,9 +65,19 @@ fun FuelLogsList(
     fuelLogs: List<FuelLog>,
     onClose: () -> Unit = {},
     onAddNew: () -> Unit = {},
-    onDelete: (FuelLog) -> Unit = {}
+    onDelete: (FuelLog) -> Unit = {},
+    embeddedInParentScroll: Boolean = false,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    if (embeddedInParentScroll) {
+        EmbeddedFuelLedger(
+            fuelLogs = fuelLogs,
+            onAddNew = onAddNew,
+            onDelete = onDelete,
+        )
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
         // Premium Header
         Box(
             modifier = Modifier
@@ -163,7 +176,7 @@ fun FuelLogsList(
         // List Items
         if (fuelLogs.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -172,18 +185,133 @@ fun FuelLogsList(
                 )
             }
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
-                items(fuelLogs, key = { it.id }) { log ->
-                    PremiumFuelLogItem(log, onDelete = onDelete)
+            if (embeddedInParentScroll) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    fuelLogs.forEach { log ->
+                        PremiumFuelLogItem(log, onDelete = onDelete)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    items(fuelLogs, key = { it.id }) { log ->
+                        PremiumFuelLogItem(log, onDelete = onDelete)
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmbeddedFuelLedger(
+    fuelLogs: List<FuelLog>,
+    onAddNew: () -> Unit,
+    onDelete: (FuelLog) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (fuelLogs.isNotEmpty()) {
+            val (monthCount, monthTotal) = fuelMonthSummaryNow(fuelLogs)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Color.White.copy(alpha = 0.045f))
+                    .border(1.dp, Color.White.copy(alpha = 0.09f), RoundedCornerShape(7.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "MONTH",
+                    color = Color(0xFF7D8FA1),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    "$monthCount fills",
+                    color = Color(0xFFE2E8F0),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "₹$monthTotal",
+                    color = Color(0xFF5D8BF4),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+
+        if (fuelLogs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Color.White.copy(alpha = 0.035f))
+                    .clickable(onClick = onAddNew),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No fuel logs. Tap to add.", color = Color(0xFF7D8FA1), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            }
+        } else {
+            fuelLogs.take(8).forEach { log ->
+                CompactFuelLogRow(log = log, onDelete = onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactFuelLogRow(
+    log: FuelLog,
+    onDelete: (FuelLog) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(7.dp))
+            .background(Color.White.copy(alpha = 0.045f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(7.dp))
+            .pointerInput(log.id) {
+                detectTapGestures(onLongPress = { onDelete(log) })
+            }
+            .padding(horizontal = 9.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF5D8BF4).copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.LocalGasStation, contentDescription = null, tint = Color(0xFF5D8BF4), modifier = Modifier.size(16.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(log.date, color = Color(0xFFE2E8F0), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(log.location ?: log.time, color = Color(0xFF7D8FA1), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        log.liters?.let {
+            Text("%.1f L".format(it), color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        }
+        Text("₹${log.rupee}", color = Color(0xFFE2E8F0), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
     }
 }
 

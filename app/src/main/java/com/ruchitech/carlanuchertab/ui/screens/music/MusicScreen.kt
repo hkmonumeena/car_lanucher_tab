@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -96,12 +97,16 @@ import com.ruchitech.carlanuchertab.music.MusicTrackEntity
 import com.ruchitech.carlanuchertab.music.MusicViewModel
 import com.ruchitech.carlanuchertab.music.PlaylistTrackWithSong
 import com.ruchitech.carlanuchertab.music.PlaylistWithCount
+import com.ruchitech.carlanuchertab.ui.composables.CockpitPalette
+import com.ruchitech.carlanuchertab.ui.composables.CockpitControlChip
+import com.ruchitech.carlanuchertab.ui.composables.CockpitSectionHeader
 import com.ruchitech.carlanuchertab.ui.composables.MusicAddToPlaylistDialog
 import com.ruchitech.carlanuchertab.ui.composables.MusicAlbumArtwork
 import com.ruchitech.carlanuchertab.ui.composables.MusicConfirmDialog
 import com.ruchitech.carlanuchertab.ui.composables.MusicPlayerPanel
 import com.ruchitech.carlanuchertab.ui.composables.MusicPlayerStyle
 import com.ruchitech.carlanuchertab.ui.composables.MusicQueueBottomSheet
+import com.ruchitech.carlanuchertab.ui.composables.MusicSoundControlBottomSheet
 import com.ruchitech.carlanuchertab.ui.composables.MusicTextInputDialog
 import com.ruchitech.carlanuchertab.ui.composables.formatDuration
 import java.io.File
@@ -119,19 +124,19 @@ private data class SongMetadataDraft(
 )
 
 private object MusicScreenColors {
-    val BackgroundTop = Color(0xFF050A10)
-    val BackgroundBottom = Color(0xFF121E2C)
-    val BackgroundMid = Color(0xFF0D1622)
-    val PremiumSteel = Color(0xFF1A2430)
-    val PremiumCharcoal = Color(0xFF0A1119)
-    val PremiumAccentBand = Color(0xFF2A3D52)
-    val PanelFill = Color(0xFF141C26)
-    val RowFill = Color(0xFF1A2430)
-    val Border = Color(0x22FFFFFF)
-    val Accent = Color(0xFF5CE1E6)
-    val TextPrimary = Color(0xFFF4F7FA)
-    val TextSecondary = Color(0xB3F4F7FA)
-    val TextMuted = Color(0x80F4F7FA)
+    val BackgroundTop = CockpitPalette.BackgroundTop
+    val BackgroundBottom = CockpitPalette.BackgroundBottom
+    val BackgroundMid = CockpitPalette.BackgroundMid
+    val PremiumSteel = CockpitPalette.SurfaceRaised
+    val PremiumCharcoal = CockpitPalette.BackgroundTop
+    val PremiumAccentBand = Color(0xFF243646)
+    val PanelFill = CockpitPalette.SurfaceTop
+    val RowFill = CockpitPalette.SurfaceRaised
+    val Border = CockpitPalette.Border
+    val Accent = CockpitPalette.Accent
+    val TextPrimary = CockpitPalette.TextPrimary
+    val TextSecondary = CockpitPalette.TextSecondary
+    val TextMuted = CockpitPalette.TextMuted
 }
 
 private enum class MusicTab {
@@ -191,6 +196,7 @@ fun MusicScreen(
     val recentlyPlayed by viewModel.recentlyPlayedTracks.collectAsState()
     val mostPlayed by viewModel.mostPlayedTracks.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
+    val soundControlState by viewModel.soundControlState.collectAsState()
     val likedTrackUris = remember(likedTracks) { likedTracks.map { it.uri }.toSet() }
     val currentTrack = playerState.currentTrack
     val isCurrentTrackLiked = currentTrack != null && currentTrack.uri in likedTrackUris
@@ -216,6 +222,7 @@ fun MusicScreen(
     var trackPendingDelete by remember { mutableStateOf<MusicTrackEntity?>(null) }
     var addToPlaylistTrack by remember { mutableStateOf<MusicTrackEntity?>(null) }
     var showQueueSheet by remember { mutableStateOf(false) }
+    var showSoundControlSheet by remember { mutableStateOf(false) }
     var editingTrack by remember { mutableStateOf<MusicTrackEntity?>(null) }
     var metadataDraft by remember { mutableStateOf<SongMetadataDraft?>(null) }
 
@@ -611,18 +618,27 @@ fun MusicScreen(
 
                         selectedTab == MusicTab.Smart -> {
                             SmartHubView(
+                                allTracks = filteredTracks,
                                 recentlyAdded = recentlyAdded,
                                 recentlyPlayed = recentlyPlayed,
                                 mostPlayed = mostPlayed,
+                                likedTracks = filteredLiked,
+                                genres = filteredGenres,
+                                currentTrack = currentTrack,
                                 viewMode = libraryViewMode,
                                 likedTrackUris = likedTrackUris,
                                 searchQuery = searchQuery,
+                                onResume = viewModel::togglePlayback,
+                                onPlayAll = { viewModel.playAllSongs(it.uri) },
                                 onPlayRecent = { viewModel.playRecentlyAdded(it.uri) },
                                 onPlayPlayed = { viewModel.playRecentlyPlayed(it.uri) },
                                 onPlayMost = { viewModel.playMostPlayed(it.uri) },
+                                onPlayLiked = { viewModel.playLikedSongs(it.uri) },
+                                onPlayGenre = { genre, track -> viewModel.playGenre(genre, track.uri) },
                                 onAddToPlaylist = { addToPlaylistTrack = it },
                                 onToggleLike = { viewModel.toggleLike(it.uri) },
-                                onDelete = { trackPendingDelete = it }
+                                onDelete = { trackPendingDelete = it },
+                                onOpenQueue = { showQueueSheet = true }
                             )
                         }
 
@@ -692,6 +708,7 @@ fun MusicScreen(
                     onToggleShuffle = viewModel::toggleShuffle,
                     onCycleRepeat = viewModel::cycleRepeatMode,
                     onOpenQueue = { showQueueSheet = true },
+                    onOpenSoundControl = { showSoundControlSheet = true },
                 )
             }
         }
@@ -802,145 +819,327 @@ fun MusicScreen(
         },
         onPlayQueueIndex = viewModel::playQueueIndex,
     )
+
+    MusicSoundControlBottomSheet(
+        visible = showSoundControlSheet,
+        onDismiss = { showSoundControlSheet = false },
+        state = soundControlState,
+        onPreset = viewModel::setSoundPreset,
+        onBassChange = viewModel::setBassLevel,
+        onTrebleChange = viewModel::setTrebleLevel,
+        onLoudnessChange = viewModel::setLoudnessLevel,
+        onSoundZoneChange = viewModel::setSoundZone,
+        onReset = viewModel::resetSoundControl,
+    )
 }
 
 @Composable
 private fun SmartHubView(
+    allTracks: List<MusicTrackEntity>,
     recentlyAdded: List<MusicTrackEntity>,
     recentlyPlayed: List<MusicTrackEntity>,
     mostPlayed: List<MusicTrackEntity>,
+    likedTracks: List<MusicTrackEntity>,
+    genres: List<GenreSummary>,
+    currentTrack: MusicTrackEntity?,
     viewMode: MusicLibraryViewMode,
     likedTrackUris: Set<String>,
     searchQuery: String,
+    onResume: () -> Unit,
+    onPlayAll: (MusicTrackEntity) -> Unit,
     onPlayRecent: (MusicTrackEntity) -> Unit,
     onPlayPlayed: (MusicTrackEntity) -> Unit,
     onPlayMost: (MusicTrackEntity) -> Unit,
+    onPlayLiked: (MusicTrackEntity) -> Unit,
+    onPlayGenre: (String, MusicTrackEntity) -> Unit,
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
     onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
+    onOpenQueue: () -> Unit,
 ) {
     val ra = recentlyAdded.filterTrackSearch(searchQuery)
     val rp = recentlyPlayed.filterTrackSearch(searchQuery)
     val mp = mostPlayed.filterTrackSearch(searchQuery)
-
-    if (viewMode == MusicLibraryViewMode.Grid) {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(148.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SmartSectionHeader("Recently added")
-            }
-            if (ra.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SmartSectionEmpty("No tracks in the library yet.")
-                }
-            } else {
-                items(ra, key = { "ra_${it.uri}" }) { track ->
-                    TrackGridItem(
-                        track = track,
-                        isLiked = track.uri in likedTrackUris,
-                        onClick = { onPlayRecent(track) },
-                    )
-                }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SmartSectionHeader("Recently played")
-            }
-            if (rp.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SmartSectionEmpty("Play songs to build this list.")
-                }
-            } else {
-                items(rp, key = { "rp_${it.uri}" }) { track ->
-                    TrackGridItem(
-                        track = track,
-                        isLiked = track.uri in likedTrackUris,
-                        onClick = { onPlayPlayed(track) },
-                    )
-                }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SmartSectionHeader("Most played")
-            }
-            if (mp.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SmartSectionEmpty("Counts appear after you listen with the new player.")
-                }
-            } else {
-                items(mp, key = { "mp_${it.uri}" }) { track ->
-                    TrackGridItem(
-                        track = track,
-                        isLiked = track.uri in likedTrackUris,
-                        onClick = { onPlayMost(track) },
-                    )
-                }
-            }
-        }
-        return
-    }
+    val liked = likedTracks.filterTrackSearch(searchQuery)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            SmartSectionHeader("Recently added")
+            ForYouHero(
+                currentTrack = currentTrack,
+                fallbackTrack = rp.firstOrNull() ?: ra.firstOrNull() ?: allTracks.firstOrNull(),
+                onResume = onResume,
+                onPlayFallback = { track -> onPlayAll(track) },
+                onOpenQueue = onOpenQueue
+            )
         }
-        if (ra.isEmpty()) {
-            item { SmartSectionEmpty("No tracks in the library yet.") }
-        } else {
-            items(ra, key = { "ra_${it.uri}" }) { track ->
-                TrackRow(
-                    track = track,
-                    isLiked = track.uri in likedTrackUris,
-                    onPlay = { onPlayRecent(track) },
-                    onAddToPlaylist = { onPlayRecent(track) }, // Corrected callback use
-                    onToggleLike = { onToggleLike(track) },
-                    onDelete = { onDelete(track) }
-                )
-            }
-        }
-        item { Spacer(modifier = Modifier.height(4.dp)) }
         item {
-            SmartSectionHeader("Recently played")
+            TopGenresRow(
+                genres = genres.take(8),
+                allTracks = allTracks,
+                onPlayGenre = onPlayGenre
+            )
         }
-        if (rp.isEmpty()) {
-            item { SmartSectionEmpty("Play songs to build this list.") }
-        } else {
-            items(rp, key = { "rp_${it.uri}" }) { track ->
-                TrackRow(
-                    track = track,
-                    isLiked = track.uri in likedTrackUris,
-                    onPlay = { onPlayPlayed(track) },
-                    onAddToPlaylist = { onAddToPlaylist(track) },
-                    onToggleLike = { onToggleLike(track) },
-                    onDelete = { onDelete(track) }
-                )
-            }
-        }
-        item { Spacer(modifier = Modifier.height(4.dp)) }
         item {
-            SmartSectionHeader("Most played")
+            SmartHorizontalSection(
+                title = "Recently added",
+                emptyMessage = "No tracks in the library yet.",
+                tracks = ra,
+                likedTrackUris = likedTrackUris,
+                onPlay = onPlayRecent,
+                onPlayAll = { ra.firstOrNull()?.let(onPlayRecent) }
+            )
         }
-        if (mp.isEmpty()) {
-            item { SmartSectionEmpty("Counts appear after you listen with the new player.") }
-        } else {
-            items(mp, key = { "mp_${it.uri}" }) { track ->
-                TrackRow(
-                    track = track,
-                    isLiked = track.uri in likedTrackUris,
-                    onPlay = { onPlayMost(track) },
-                    onAddToPlaylist = { onAddToPlaylist(track) },
-                    onToggleLike = { onToggleLike(track) },
-                    onDelete = { onDelete(track) }
+        item {
+            SmartHorizontalSection(
+                title = "Recently played",
+                emptyMessage = "Play songs to build this list.",
+                tracks = rp,
+                likedTrackUris = likedTrackUris,
+                onPlay = onPlayPlayed,
+                onPlayAll = { rp.firstOrNull()?.let(onPlayPlayed) }
+            )
+        }
+        item {
+            SmartHorizontalSection(
+                title = "Most played",
+                emptyMessage = "Counts appear after you listen with the new player.",
+                tracks = mp,
+                likedTrackUris = likedTrackUris,
+                onPlay = onPlayMost,
+                onPlayAll = { mp.firstOrNull()?.let(onPlayMost) }
+            )
+        }
+        item {
+            SmartHorizontalSection(
+                title = "Liked",
+                emptyMessage = "Tap the heart on songs you want here.",
+                tracks = liked,
+                likedTrackUris = likedTrackUris,
+                onPlay = onPlayLiked,
+                onPlayAll = { liked.firstOrNull()?.let(onPlayLiked) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ForYouHero(
+    currentTrack: MusicTrackEntity?,
+    fallbackTrack: MusicTrackEntity?,
+    onResume: () -> Unit,
+    onPlayFallback: (MusicTrackEntity) -> Unit,
+    onOpenQueue: () -> Unit,
+) {
+    val heroTrack = currentTrack ?: fallbackTrack
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        CockpitPalette.Accent.copy(alpha = 0.18f),
+                        CockpitPalette.SurfaceRaised.copy(alpha = 0.94f),
+                        CockpitPalette.SurfaceBottom
+                    )
                 )
+            )
+            .border(1.dp, CockpitPalette.BorderStrong, RoundedCornerShape(18.dp))
+            .padding(12.dp)
+    ) {
+        if (heroTrack == null) {
+            MusicEmptyState(
+                title = "Build your music zone",
+                message = "Choose a library and your daily mixes will appear here."
+            )
+            return@Box
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            MusicAlbumArtwork(
+                artworkPath = heroTrack.artworkPath,
+                title = heroTrack.title,
+                modifier = Modifier.size(86.dp),
+                cornerRadius = 14.dp
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (currentTrack != null) "CONTINUE LISTENING" else "START YOUR DRIVE",
+                    color = CockpitPalette.Accent,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = heroTrack.title,
+                    color = MusicScreenColors.TextPrimary,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${heroTrack.artist} • ${heroTrack.album}",
+                    color = MusicScreenColors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CockpitControlChip(
+                        label = if (currentTrack != null) "Resume" else "Play",
+                        selected = true,
+                        onClick = {
+                            if (currentTrack != null) onResume() else onPlayFallback(heroTrack)
+                        }
+                    )
+                    CockpitControlChip(
+                        label = "Queue",
+                        selected = false,
+                        onClick = onOpenQueue
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun TopGenresRow(
+    genres: List<GenreSummary>,
+    allTracks: List<MusicTrackEntity>,
+    onPlayGenre: (String, MusicTrackEntity) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        CockpitSectionHeader(title = "Top Genres")
+        if (genres.isEmpty()) {
+            SmartSectionEmpty("Genres appear after your library is scanned.")
+            return
+        }
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(end = 8.dp)
+        ) {
+            items(genres, key = { it.genre }) { genre ->
+                Box(
+                    modifier = Modifier
+                        .width(132.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(CockpitPalette.SurfaceRaised.copy(alpha = 0.88f))
+                        .border(1.dp, CockpitPalette.Border, RoundedCornerShape(14.dp))
+                        .clickable {
+                            allTracks.firstOrNull { it.genre == genre.genre }?.let { track ->
+                                onPlayGenre(genre.genre, track)
+                            }
+                        }
+                        .padding(10.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = genre.genre,
+                            color = MusicScreenColors.TextPrimary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${genre.songCount} songs",
+                            color = MusicScreenColors.TextMuted,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartHorizontalSection(
+    title: String,
+    emptyMessage: String,
+    tracks: List<MusicTrackEntity>,
+    likedTrackUris: Set<String>,
+    onPlay: (MusicTrackEntity) -> Unit,
+    onPlayAll: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                SmartSectionHeader(title)
+            }
+            if (tracks.isNotEmpty()) {
+                TextButton(onClick = onPlayAll) {
+                    Text("Play all", color = MusicScreenColors.Accent)
+                }
+            }
+        }
+        if (tracks.isEmpty()) {
+            SmartSectionEmpty(emptyMessage)
+            return
+        }
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(end = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(tracks, key = { "${title}_${it.uri}" }) { track ->
+                Box(modifier = Modifier.width(152.dp)) {
+                    SmartSongCard(
+                        track = track,
+                        isLiked = track.uri in likedTrackUris,
+                        onClick = { onPlay(track) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartSongCard(
+    track: MusicTrackEntity,
+    isLiked: Boolean,
+    onClick: () -> Unit,
+) {
+    TrackGridItem(
+        track = track,
+        isLiked = isLiked,
+        onClick = onClick
+    )
+}
+
+@Composable
+private fun MusicEmptyState(
+    title: String,
+    message: String,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = title,
+            color = MusicScreenColors.TextPrimary,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = message,
+            color = MusicScreenColors.TextMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -1076,7 +1275,14 @@ private fun MusicTabs(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
     ) {
-        MusicTab.entries.forEach { tab ->
+        listOf(
+            MusicTab.Smart,
+            MusicTab.Songs,
+            MusicTab.Liked,
+            MusicTab.Genres,
+            MusicTab.Playlists,
+            MusicTab.Albums
+        ).forEach { tab ->
             val selected = tab == selectedTab
             Box(
                 modifier = Modifier
@@ -1097,7 +1303,7 @@ private fun MusicTabs(
                     )
             ) {
                 Text(
-                    text = tab.name,
+                    text = tab.displayLabel(),
                     color = if (selected) MusicScreenColors.Accent else MusicScreenColors.TextSecondary,
                     style = if (compact) {
                         MaterialTheme.typography.labelMedium
@@ -1108,6 +1314,13 @@ private fun MusicTabs(
                 )
             }
         }
+    }
+}
+
+private fun MusicTab.displayLabel(): String {
+    return when (this) {
+        MusicTab.Smart -> "For You"
+        else -> name
     }
 }
 

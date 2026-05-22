@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -92,22 +91,22 @@ private fun HomeDockItem(
     ) {
         Box(
             modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
+                .size(58.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .then(
                     if (isAllApps) {
                         Modifier.background(
                             Brush.linearGradient(
                                 colors = listOf(
-                                    HomePalette.AccentSoft,
-                                    HomePalette.Accent
+                                    CockpitPalette.AccentSoft,
+                                    CockpitPalette.Accent
                                 )
                             )
                         )
                     } else {
                         Modifier
-                            .background(Color.White.copy(alpha = 0.12f))
-                            .border(1.dp, HomePalette.GlassBorder, CircleShape)
+                            .background(Color.White.copy(alpha = 0.075f))
+                            .border(1.dp, CockpitPalette.Border, RoundedCornerShape(14.dp))
                     }
                 ),
             contentAlignment = Alignment.Center
@@ -116,7 +115,7 @@ private fun HomeDockItem(
                 painter = painterResource(id = item.iconRes),
                 contentDescription = item.label,
                 colorFilter = ColorFilter.tint(
-                    if (isAllApps) Color(0xFF0A1218) else HomePalette.TextPrimary
+                    if (isAllApps) CockpitPalette.OnAccent else CockpitPalette.TextPrimary
                 ),
                 modifier = Modifier.size(32.dp)
             )
@@ -124,7 +123,7 @@ private fun HomeDockItem(
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = item.label,
-            color = HomePalette.TextSecondary,
+            color = CockpitPalette.TextSecondary,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
             maxLines = 1,

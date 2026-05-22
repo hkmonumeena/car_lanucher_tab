@@ -10,6 +10,7 @@ import com.ruchitech.carlanuchertab.ui.btservices.BluetoothServerScreen
 import com.ruchitech.carlanuchertab.ui.screens.apps.AppUi
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.HomeScreen
 import com.ruchitech.carlanuchertab.ui.screens.music.MusicScreen
+import com.ruchitech.carlanuchertab.ui.screens.trips.TripsScreen
 
 @Composable
 fun NavigationGraph(navController: NavHostController) {
@@ -39,6 +40,12 @@ fun NavigationGraph(navController: NavHostController) {
                         }
                     }
 
+                    is NavItem.Fuel -> {
+                        navController.navigate(Screen.Trips) {
+                            launchSingleTop = true
+                        }
+                    }
+
                     else -> {
                         //navController.navigate(Screen.Apps)
                     }
@@ -55,6 +62,12 @@ fun NavigationGraph(navController: NavHostController) {
 
         composable<Screen.Music> {
             MusicScreen(onBack = {
+                navController.popBackStack()
+            })
+        }
+
+        composable<Screen.Trips> {
+            TripsScreen(onBack = {
                 navController.popBackStack()
             })
         }

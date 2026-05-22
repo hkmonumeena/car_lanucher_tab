@@ -20,16 +20,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 object HomePalette {
-    val Accent = Color(0xFF5CE1E6)
-    val AccentSoft = Color(0xFF3A9EA3)
-    val TextPrimary = Color(0xFFF4F7FA)
-    val TextSecondary = Color(0xB8C5D3)
-    val GlassTop = Color(0xE6101820)
-    val GlassBottom = Color(0xD8141E2A)
-    val GlassBorder = Color(0x28FFFFFF)
-    val DockTop = Color(0xE0121A24)
-    val DockBottom = Color(0xD0182430)
-    val Success = Color(0xFF69F0AE)
+    val Accent = CockpitPalette.Accent
+    val AccentSoft = CockpitPalette.AccentSoft
+    val TextPrimary = CockpitPalette.TextPrimary
+    val TextSecondary = CockpitPalette.TextSecondary
+    val GlassTop = CockpitPalette.SurfaceTop
+    val GlassBottom = CockpitPalette.SurfaceBottom
+    val GlassBorder = CockpitPalette.Border
+    val DockTop = Color(0xEE101922)
+    val DockBottom = Color(0xE6070D13)
+    val Success = CockpitPalette.Success
 }
 
 @Composable
@@ -84,22 +84,7 @@ fun HomeGlassPanel(
     cornerRadius: Dp = 22.dp,
     content: @Composable () -> Unit,
 ) {
-    Box(
-        modifier = modifier
-            .shadow(
-                elevation = 12.dp,
-                shape = RoundedCornerShape(cornerRadius),
-                ambientColor = Color.Black.copy(alpha = 0.5f),
-                spotColor = Color.Black.copy(alpha = 0.35f)
-            )
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(HomePalette.GlassTop, HomePalette.GlassBottom)
-                )
-            )
-            .border(1.dp, HomePalette.GlassBorder, RoundedCornerShape(cornerRadius))
-    ) {
+    CockpitSurface(modifier = modifier, radius = cornerRadius) {
         content()
     }
 }
@@ -112,17 +97,17 @@ fun HomeDockPanel(
     Box(
         modifier = modifier
             .shadow(
-                elevation = 16.dp,
-                shape = RoundedCornerShape(26.dp),
+                elevation = 10.dp,
+                shape = RoundedCornerShape(18.dp),
                 ambientColor = Color.Black.copy(alpha = 0.55f)
             )
-            .clip(RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(
                 Brush.verticalGradient(
                     colors = listOf(HomePalette.DockTop, HomePalette.DockBottom)
                 )
             )
-            .border(1.dp, HomePalette.GlassBorder, RoundedCornerShape(26.dp))
+            .border(1.dp, HomePalette.GlassBorder, RoundedCornerShape(18.dp))
     ) {
         content()
     }

@@ -2,10 +2,14 @@ package com.ruchitech.carlanuchertab.music
 
 import android.content.Context
 import android.content.Intent
+import android.media.audiofx.BassBoost
+import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -44,6 +48,10 @@ class MusicPlayerManager @Inject constructor(
 
     private var lastProgressPersistElapsed: Long = 0L
     private var fadeVolumeJob: Job? = null
+    private var equalizer: Equalizer? = null
+    private var bassBoost: BassBoost? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var activeAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -64,6 +72,9 @@ class MusicPlayerManager @Inject constructor(
 
     private val _playerState = MutableStateFlow(MusicPlayerUiState())
     val playerState: StateFlow<MusicPlayerUiState> = _playerState.asStateFlow()
+
+    private val _soundControlState = MutableStateFlow(MusicSoundControlState())
+    val soundControlState: StateFlow<MusicSoundControlState> = _soundControlState.asStateFlow()
 
     init {
         scope.launch(Dispatchers.IO) {
@@ -238,6 +249,60 @@ class MusicPlayerManager @Inject constructor(
             } else {
                 updateState(null)
             }
+        }
+    }
+
+    fun setSoundPreset(preset: MusicSoundPreset) {
+        mainHandler.post {
+            _soundControlState.value = preset.toSoundState(_soundControlState.value.effectsAvailable)
+            applySoundEffects(playerInternal)
+        }
+    }
+
+    fun setBassLevel(value: Float) {
+        mainHandler.post {
+            _soundControlState.value = _soundControlState.value.copy(
+                bass = value.coerceIn(-1f, 1f)
+            )
+            applySoundEffects(playerInternal)
+        }
+    }
+
+    fun setTrebleLevel(value: Float) {
+        mainHandler.post {
+            _soundControlState.value = _soundControlState.value.copy(
+                treble = value.coerceIn(-1f, 1f)
+            )
+            applySoundEffects(playerInternal)
+        }
+    }
+
+    fun setLoudnessLevel(value: Float) {
+        mainHandler.post {
+            _soundControlState.value = _soundControlState.value.copy(
+                loudness = value.coerceIn(-1f, 1f)
+            )
+            applySoundEffects(playerInternal)
+        }
+    }
+
+    fun setSoundZone(x: Float, y: Float) {
+        mainHandler.post {
+            _soundControlState.value = _soundControlState.value.copy(
+                soundZoneX = x.coerceIn(-1f, 1f),
+                soundZoneY = y.coerceIn(-1f, 1f),
+                cabinControlAvailable = false
+            )
+        }
+    }
+
+    fun resetSoundControl() {
+        mainHandler.post {
+            val available = _soundControlState.value.effectsAvailable
+            _soundControlState.value = MusicSoundPreset.Balanced
+                .toSoundState(available)
+                .copy(cabinControlAvailable = false)
+            applySoundEffects(playerInternal)
         }
     }
 
@@ -442,6 +507,7 @@ class MusicPlayerManager @Inject constructor(
         player.shuffleModeEnabled = prefsMirror.shuffleEnabled
         player.repeatMode = prefsMirror.repeatMode
         player.addListener(listener)
+        applySoundEffects(player)
         startProgressUpdates()
         return player
     }
@@ -469,6 +535,8 @@ class MusicPlayerManager @Inject constructor(
             )
             return
         }
+
+        applySoundEffects(p as? ExoPlayer)
 
         val currentIndex = p.currentMediaItemIndex
         val currentTrack = when {
@@ -505,5 +573,107 @@ class MusicPlayerManager @Inject constructor(
             .setUri(uri)
             .setMediaMetadata(metadataBuilder.build())
             .build()
+    }
+
+    private fun MusicSoundPreset.toSoundState(effectsAvailable: Boolean): MusicSoundControlState {
+        val base = when (this) {
+            MusicSoundPreset.Balanced -> MusicSoundControlState()
+            MusicSoundPreset.BassBoost -> MusicSoundControlState(preset = this, bass = 0.78f, treble = 0.12f, loudness = 0.34f)
+            MusicSoundPreset.Vocal -> MusicSoundControlState(preset = this, bass = -0.18f, treble = 0.34f, loudness = 0.08f)
+            MusicSoundPreset.Night -> MusicSoundControlState(preset = this, bass = -0.36f, treble = -0.08f, loudness = -0.45f)
+            MusicSoundPreset.Wide -> MusicSoundControlState(preset = this, bass = 0.22f, treble = 0.42f, loudness = 0.18f)
+        }
+        return base.copy(effectsAvailable = effectsAvailable)
+    }
+
+    private fun applySoundEffects(player: ExoPlayer?) {
+        val sessionId = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
+        if (sessionId == C.AUDIO_SESSION_ID_UNSET) {
+            releaseSoundEffects()
+            return
+        }
+
+        if (sessionId != activeAudioSessionId || equalizer == null) {
+            releaseSoundEffects()
+            activeAudioSessionId = sessionId
+            val created = runCatching {
+                equalizer = Equalizer(0, sessionId).apply { enabled = true }
+                bassBoost = BassBoost(0, sessionId).apply { enabled = true }
+                loudnessEnhancer = LoudnessEnhancer(sessionId).apply { enabled = true }
+            }
+            if (created.isFailure) {
+                Log.w("MusicPlayerManager", "Audio effects unavailable", created.exceptionOrNull())
+                releaseSoundEffects()
+                setSoundEffectsAvailability(false)
+                return
+            }
+            setSoundEffectsAvailability(true)
+        }
+
+        val state = _soundControlState.value
+        runCatching {
+            equalizer?.let { eq ->
+                val range = eq.bandLevelRange
+                val min = range[0].toInt()
+                val max = range[1].toInt()
+                val neutral = 0
+                repeat(eq.numberOfBands.toInt()) { index ->
+                    val band = index.toShort()
+                    val centerHz = eq.getCenterFreq(band) / 1000
+                    val target = when {
+                        centerHz <= 250 -> state.bass
+                        centerHz >= 3500 -> state.treble
+                        state.preset == MusicSoundPreset.Vocal && centerHz in 500..3200 -> 0.28f
+                        else -> 0f
+                    }
+                    eq.setBandLevel(band, mapUnitToBandLevel(target, min, max, neutral))
+                }
+            }
+
+            bassBoost?.let { boost ->
+                val strength = (state.bass.coerceAtLeast(0f) * 1000f).toInt().coerceIn(0, 1000).toShort()
+                boost.setStrength(strength)
+                boost.enabled = strength > 0
+            }
+
+            loudnessEnhancer?.let { loudness ->
+                val gainMb = (state.loudness.coerceAtLeast(0f) * 1800f).toInt()
+                loudness.setTargetGain(gainMb)
+                loudness.enabled = gainMb > 0
+            }
+        }.onFailure {
+            Log.w("MusicPlayerManager", "Unable to apply sound control", it)
+            setSoundEffectsAvailability(false)
+        }
+    }
+
+    private fun mapUnitToBandLevel(value: Float, min: Int, max: Int, neutral: Int): Short {
+        val clamped = value.coerceIn(-1f, 1f)
+        val target = if (clamped >= 0f) {
+            neutral + ((max - neutral) * clamped)
+        } else {
+            neutral + ((neutral - min) * clamped)
+        }
+        return target.toInt().coerceIn(min, max).toShort()
+    }
+
+    private fun setSoundEffectsAvailability(available: Boolean) {
+        val current = _soundControlState.value
+        val expectedMessage = if (available) null else "Sound effects are limited on this device or audio session."
+        if (current.effectsAvailable == available && current.limitationMessage == expectedMessage) return
+        _soundControlState.value = current.copy(
+            effectsAvailable = available,
+            limitationMessage = expectedMessage
+        )
+    }
+
+    private fun releaseSoundEffects() {
+        runCatching { equalizer?.release() }
+        runCatching { bassBoost?.release() }
+        runCatching { loudnessEnhancer?.release() }
+        equalizer = null
+        bassBoost = null
+        loudnessEnhancer = null
+        activeAudioSessionId = C.AUDIO_SESSION_ID_UNSET
     }
 }

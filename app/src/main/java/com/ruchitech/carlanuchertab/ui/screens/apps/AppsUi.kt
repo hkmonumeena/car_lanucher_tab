@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.ruchitech.carlanuchertab.MyApp
 import com.ruchitech.carlanuchertab.MyApp.Companion.loadInstalledApps
+import com.ruchitech.carlanuchertab.ui.composables.CockpitPalette
+import com.ruchitech.carlanuchertab.ui.composables.cockpitBackgroundBrush
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -118,13 +120,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
         }
     }
 
-    // Modern Cybernetic Dark Background
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF0F172A), // Deep rich blue-grey
-            Color(0xFF020617)  // Deepest slate black
-        )
-    )
+    val backgroundBrush = cockpitBackgroundBrush()
 
     Box(
         modifier = modifier
@@ -133,7 +129,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
             .drawBehind {
                 // Dynamically paint a fine glowing tech grid overlay
                 val gridSpacing = 60.dp.toPx()
-                val gridColor = Color(0xFF38BDF8).copy(alpha = 0.03f)
+                val gridColor = CockpitPalette.Accent.copy(alpha = 0.018f)
                 val strokeWidth = 1.dp.toPx()
 
                 var x = 0f
@@ -151,7 +147,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                 // Top accent light glow
                 drawRect(
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color(0xFF38BDF8).copy(alpha = 0.05f), Color.Transparent),
+                        colors = listOf(CockpitPalette.Accent.copy(alpha = 0.04f), Color.Transparent),
                         startY = 0f,
                         endY = 150.dp.toPx()
                     )
@@ -181,7 +177,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                         .background(Color.White.copy(alpha = 0.06f))
                         .border(
                             width = 1.2.dp,
-                            color = Color(0xFF38BDF8).copy(alpha = 0.3f),
+                            color = CockpitPalette.BorderStrong,
                             shape = CircleShape
                         )
                         .clickable(onClick = onBack),
@@ -190,7 +186,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Back",
-                        tint = Color(0xFF38BDF8),
+                        tint = CockpitPalette.Accent,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -200,13 +196,13 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                 Column {
                     Text(
                         text = "APPLICATIONS",
-                        color = Color.White,
+                        color = CockpitPalette.TextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 1.5.sp,
                         style = TextStyle(
                             shadow = androidx.compose.ui.graphics.Shadow(
-                                color = Color(0xFF38BDF8).copy(alpha = 0.5f),
+                                color = CockpitPalette.Accent.copy(alpha = 0.38f),
                                 offset = Offset(0f, 0f),
                                 blurRadius = 10f
                             )
@@ -214,7 +210,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                     )
                     Text(
                         text = "${filteredApps.size} apps found",
-                        color = Color(0xFF94A3B8),
+                        color = CockpitPalette.TextMuted,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -237,7 +233,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                         .background(Color.White.copy(alpha = 0.05f))
                         .border(
                             width = 1.dp,
-                            color = Color(0xFF38BDF8).copy(alpha = 0.25f),
+                            color = CockpitPalette.Border,
                             shape = RoundedCornerShape(22.dp)
                         )
                         .padding(horizontal = 14.dp),
@@ -250,7 +246,7 @@ fun InstalledAppsScreen(modifier: Modifier, onBack: () -> Unit) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = Color(0xFF38BDF8),
+                            tint = CockpitPalette.Accent,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))

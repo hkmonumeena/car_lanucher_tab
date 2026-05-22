@@ -19,6 +19,11 @@ import com.ruchitech.carlanuchertab.music.PlaylistTrackEntity
 import com.ruchitech.carlanuchertab.roomdb.dao.DashboardDao
 import com.ruchitech.carlanuchertab.roomdb.data.Dashboard
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
+import com.ruchitech.carlanuchertab.trip.TripDao
+import com.ruchitech.carlanuchertab.trip.TripEntity
+import com.ruchitech.carlanuchertab.trip.TripExpenseEntity
+import com.ruchitech.carlanuchertab.trip.TripExpenseShareEntity
+import com.ruchitech.carlanuchertab.trip.TripPersonEntity
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -59,13 +64,89 @@ abstract class AppDatabase : RoomDatabase() {
         LikedTrackEntity::class,
         MusicPlaybackPrefsEntity::class,
         TrackPlayStatsEntity::class,
+        TripEntity::class,
+        TripPersonEntity::class,
+        TripExpenseEntity::class,
+        TripExpenseShareEntity::class,
     ],
-    version = 7
+    version = 8
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dashboardDao(): DashboardDao
     abstract fun musicDao(): MusicDao
+    abstract fun tripDao(): TripDao
+}
+
+private val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `trips` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `name` TEXT NOT NULL,
+                `startOdo` INTEGER NOT NULL,
+                `endOdo` INTEGER,
+                `status` TEXT NOT NULL,
+                `startedAt` INTEGER NOT NULL,
+                `endedAt` INTEGER,
+                `notes` TEXT
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_trips_status` ON `trips` (`status`)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_trips_startedAt` ON `trips` (`startedAt`)")
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `trip_persons` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `tripId` INTEGER NOT NULL,
+                `name` TEXT NOT NULL,
+                `active` INTEGER NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                FOREIGN KEY(`tripId`) REFERENCES `trips`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_trip_persons_tripId` ON `trip_persons` (`tripId`)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_trip_persons_tripId_name` ON `trip_persons` (`tripId`, `name`)")
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `trip_expenses` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `tripId` INTEGER NOT NULL,
+                `type` TEXT NOT NULL,
+                `title` TEXT NOT NULL,
+                `amount` INTEGER NOT NULL,
+                `paidByPersonId` INTEGER NOT NULL,
+                `splitEnabled` INTEGER NOT NULL,
+                `manualOdo` INTEGER,
+                `fuelLiters` REAL,
+                `fuelPrice` REAL,
+                `note` TEXT,
+                `createdAt` INTEGER NOT NULL,
+                FOREIGN KEY(`tripId`) REFERENCES `trips`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(`paidByPersonId`) REFERENCES `trip_persons`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_trip_expenses_tripId` ON `trip_expenses` (`tripId`)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_trip_expenses_paidByPersonId` ON `trip_expenses` (`paidByPersonId`)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_trip_expenses_type` ON `trip_expenses` (`type`)")
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `trip_expense_shares` (
+                `expenseId` INTEGER NOT NULL,
+                `personId` INTEGER NOT NULL,
+                `includedInSplit` INTEGER NOT NULL,
+                PRIMARY KEY(`expenseId`, `personId`),
+                FOREIGN KEY(`expenseId`) REFERENCES `trip_expenses`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(`personId`) REFERENCES `trip_persons`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_trip_expense_shares_personId` ON `trip_expense_shares` (`personId`)")
+    }
 }
 
 private val MIGRATION_5_6 = object : Migration(5, 6) {
@@ -256,7 +337,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "car_launcher_db"
-        ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .build()
     }
 
@@ -268,5 +349,10 @@ object DatabaseModule {
     @Provides
     fun provideMusicDao(db: AppDatabase): MusicDao {
         return db.musicDao()
+    }
+
+    @Provides
+    fun provideTripDao(db: AppDatabase): TripDao {
+        return db.tripDao()
     }
 }

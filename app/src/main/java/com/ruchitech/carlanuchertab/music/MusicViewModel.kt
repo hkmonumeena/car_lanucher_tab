@@ -75,6 +75,7 @@ class MusicViewModel @Inject constructor(
     )
 
     val playerState: StateFlow<MusicPlayerUiState> = playerManager.playerState
+    val soundControlState: StateFlow<MusicSoundControlState> = playerManager.soundControlState
 
     private var libraryResumeAttempted: Boolean = false
 
@@ -312,6 +313,30 @@ class MusicViewModel @Inject constructor(
 
     fun setCrossfadeEnabled(enabled: Boolean) {
         playerManager.setCrossfadeMs(if (enabled) 400 else 0)
+    }
+
+    fun setSoundPreset(preset: MusicSoundPreset) {
+        playerManager.setSoundPreset(preset)
+    }
+
+    fun setBassLevel(value: Float) {
+        playerManager.setBassLevel(value)
+    }
+
+    fun setTrebleLevel(value: Float) {
+        playerManager.setTrebleLevel(value)
+    }
+
+    fun setLoudnessLevel(value: Float) {
+        playerManager.setLoudnessLevel(value)
+    }
+
+    fun setSoundZone(x: Float, y: Float) {
+        playerManager.setSoundZone(x, y)
+    }
+
+    fun resetSoundControl() {
+        playerManager.resetSoundControl()
     }
 
     fun moveQueueItem(from: Int, to: Int) {
