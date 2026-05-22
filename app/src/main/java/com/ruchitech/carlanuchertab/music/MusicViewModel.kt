@@ -1,6 +1,7 @@
 package com.ruchitech.carlanuchertab.music
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -341,6 +342,37 @@ class MusicViewModel @Inject constructor(
     fun deleteCurrentTrack() {
         val trackUri = playerState.value.currentTrack?.uri ?: return
         deleteTrack(trackUri)
+    }
+
+    fun updateTrackMetadata(
+        trackUri: String,
+        title: String,
+        artist: String,
+        album: String,
+        genre: String,
+        year: Int,
+        artworkUri: Uri?,
+    ) {
+        viewModelScope.launch {
+            val artworkPath = artworkUri?.let { repository.cacheCustomArtwork(trackUri, it) }
+            val result = repository.updateTrackMetadata(
+                trackUri = trackUri,
+                metadata = TrackMetadataUpdate(
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    genre = genre,
+                    year = year,
+                    artworkPath = artworkPath
+                )
+            )
+            result
+                .onSuccess { _messages.emit("Song metadata updated.") }
+                .onFailure {
+                    Log.e("fhgdgiybdg", "updateTrackMetadata: ${it.message}")
+                    _messages.emit(it.message ?: "Unable to update song metadata.")
+                }
+        }
     }
 
     private suspend fun playTrackFromList(

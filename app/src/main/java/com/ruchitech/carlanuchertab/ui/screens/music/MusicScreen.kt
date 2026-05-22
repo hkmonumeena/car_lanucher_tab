@@ -5,12 +5,16 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
 import android.os.Build
+import androidx.compose.animation.animateColorAsState
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -72,6 +77,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -79,6 +85,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.palette.graphics.Palette
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.ruchitech.carlanuchertab.music.AlbumSummary
 import com.ruchitech.carlanuchertab.music.GenreSummary
 import com.ruchitech.carlanuchertab.music.MusicSettingsEntity
@@ -94,10 +104,27 @@ import com.ruchitech.carlanuchertab.ui.composables.MusicPlayerStyle
 import com.ruchitech.carlanuchertab.ui.composables.MusicQueueBottomSheet
 import com.ruchitech.carlanuchertab.ui.composables.MusicTextInputDialog
 import com.ruchitech.carlanuchertab.ui.composables.formatDuration
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private data class SongMetadataDraft(
+    val title: String,
+    val artist: String,
+    val album: String,
+    val genre: String,
+    val yearText: String,
+    val artworkUri: Uri? = null,
+)
+
 private object MusicScreenColors {
     val BackgroundTop = Color(0xFF050A10)
     val BackgroundBottom = Color(0xFF121E2C)
+    val BackgroundMid = Color(0xFF0D1622)
+    val PremiumSteel = Color(0xFF1A2430)
+    val PremiumCharcoal = Color(0xFF0A1119)
+    val PremiumAccentBand = Color(0xFF2A3D52)
     val PanelFill = Color(0xFF141C26)
     val RowFill = Color(0xFF1A2430)
     val Border = Color(0x22FFFFFF)
@@ -167,6 +194,9 @@ fun MusicScreen(
     val likedTrackUris = remember(likedTracks) { likedTracks.map { it.uri }.toSet() }
     val currentTrack = playerState.currentTrack
     val isCurrentTrackLiked = currentTrack != null && currentTrack.uri in likedTrackUris
+    var dynamicBgTop by remember { mutableStateOf(MusicScreenColors.BackgroundTop) }
+    var dynamicBgMid by remember { mutableStateOf(Color(0xFF0D1622)) }
+    var dynamicBgBottom by remember { mutableStateOf(MusicScreenColors.BackgroundBottom) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val configuration = LocalConfiguration.current
@@ -186,6 +216,8 @@ fun MusicScreen(
     var trackPendingDelete by remember { mutableStateOf<MusicTrackEntity?>(null) }
     var addToPlaylistTrack by remember { mutableStateOf<MusicTrackEntity?>(null) }
     var showQueueSheet by remember { mutableStateOf(false) }
+    var editingTrack by remember { mutableStateOf<MusicTrackEntity?>(null) }
+    var metadataDraft by remember { mutableStateOf<SongMetadataDraft?>(null) }
 
     val folderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -208,6 +240,12 @@ fun MusicScreen(
                 )
             }
         }
+    }
+
+    val artworkPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        metadataDraft = metadataDraft?.copy(artworkUri = uri)
     }
 
     val openMusicLibrarySource: () -> Unit = {
@@ -238,6 +276,64 @@ fun MusicScreen(
             snackbarHostState.showSnackbar(message)
         }
     }
+
+    fun cinematicDim(color: Int, brightnessScale: Float, saturationScale: Float): Color {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(color, hsv)
+        hsv[1] = (hsv[1] * saturationScale).coerceIn(0f, 1f)
+        hsv[2] = (hsv[2] * brightnessScale).coerceIn(0f, 1f)
+        return Color(android.graphics.Color.HSVToColor(hsv))
+    }
+
+    fun blendColors(a: Color, b: Color, ratio: Float): Color {
+        val t = ratio.coerceIn(0f, 1f)
+        return Color(
+            red = a.red * (1f - t) + b.red * t,
+            green = a.green * (1f - t) + b.green * t,
+            blue = a.blue * (1f - t) + b.blue * t,
+            alpha = a.alpha * (1f - t) + b.alpha * t
+        )
+    }
+
+    LaunchedEffect(currentTrack?.artworkPath) {
+        val path = currentTrack?.artworkPath
+        if (path.isNullOrBlank()) {
+            dynamicBgTop = MusicScreenColors.BackgroundTop
+            dynamicBgMid = MusicScreenColors.BackgroundMid
+            dynamicBgBottom = MusicScreenColors.BackgroundBottom
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val request = ImageRequest.Builder(context)
+                    .data(File(path))
+                    .allowHardware(false)
+                    .build()
+                val result = context.imageLoader.execute(request)
+                if (result is SuccessResult) {
+                    val bitmap = (result.drawable as? BitmapDrawable)?.bitmap ?: return@runCatching
+                    val palette = Palette.from(bitmap).generate()
+                    val dominant = palette.getDominantColor(MusicScreenColors.BackgroundTop.toArgb())
+                    val darkVibrant = palette.getDarkVibrantColor(dominant)
+                    val tintedTop = cinematicDim(darkVibrant, brightnessScale = 0.35f, saturationScale = 0.46f)
+                    val tintedMid = cinematicDim(dominant, brightnessScale = 0.30f, saturationScale = 0.40f)
+                    val tintedBottom = cinematicDim(dominant, brightnessScale = 0.20f, saturationScale = 0.30f)
+
+                    dynamicBgTop = blendColors(MusicScreenColors.PremiumCharcoal, tintedTop, 0.46f)
+                    dynamicBgMid = blendColors(MusicScreenColors.PremiumAccentBand, tintedMid, 0.52f)
+                    dynamicBgBottom = blendColors(MusicScreenColors.BackgroundBottom, tintedBottom, 0.42f)
+                }
+            }.onFailure {
+                dynamicBgTop = MusicScreenColors.BackgroundTop
+                dynamicBgMid = MusicScreenColors.BackgroundMid
+                dynamicBgBottom = MusicScreenColors.BackgroundBottom
+            }
+        }
+    }
+
+    val animatedBgTop by animateColorAsState(dynamicBgTop, label = "musicScreenBgTop")
+    val animatedBgMid by animateColorAsState(dynamicBgMid, label = "musicScreenBgMid")
+    val animatedBgBottom by animateColorAsState(dynamicBgBottom, label = "musicScreenBgBottom")
 
     val filteredTracks = remember(tracks, searchQuery) { tracks.filterTrackSearch(searchQuery) }
     val filteredAlbums = remember(albums, searchQuery) { albums.filterAlbumSearch(searchQuery) }
@@ -286,14 +382,57 @@ fun MusicScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            MusicScreenColors.BackgroundTop,
-                            MusicScreenColors.BackgroundBottom
+                            animatedBgTop,
+                            animatedBgMid,
+                            animatedBgBottom
                         )
                     )
                 )
                 .padding(padding)
                 .padding(14.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.22f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.30f)
+                            )
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.08f),
+                                animatedBgMid.copy(alpha = 0.18f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.24f)
+                            )
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                animatedBgTop.copy(alpha = 0.10f),
+                                animatedBgMid.copy(alpha = 0.24f),
+                                animatedBgBottom.copy(alpha = 0.18f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -456,7 +595,17 @@ fun MusicScreen(
                                 onPlay = { viewModel.playAllSongs(it.uri) },
                                 onAddToPlaylist = { addToPlaylistTrack = it },
                                 onToggleLike = { viewModel.toggleLike(it.uri) },
-                                onDelete = { trackPendingDelete = it }
+                                onDelete = { trackPendingDelete = it },
+                                onEditMetadata = { track ->
+                                    editingTrack = track
+                                    metadataDraft = SongMetadataDraft(
+                                        title = track.title,
+                                        artist = track.artist,
+                                        album = track.album,
+                                        genre = track.genre,
+                                        yearText = if (track.year > 0) track.year.toString() else "",
+                                    )
+                                }
                             )
                         }
 
@@ -608,6 +757,34 @@ fun MusicScreen(
             onCreatePlaylist = {
                 addToPlaylistTrack = null
                 showCreatePlaylistDialog = true
+            }
+        )
+    }
+
+    if (editingTrack != null && metadataDraft != null) {
+        EditSongMetadataScreen(
+            track = editingTrack!!,
+            draft = metadataDraft!!,
+            onUpdateDraft = { metadataDraft = it },
+            onPickArtwork = { artworkPickerLauncher.launch("image/*") },
+            onDismiss = {
+                editingTrack = null
+                metadataDraft = null
+            },
+            onSave = {
+                val track = editingTrack ?: return@EditSongMetadataScreen
+                val draft = metadataDraft ?: return@EditSongMetadataScreen
+                viewModel.updateTrackMetadata(
+                    trackUri = track.uri,
+                    title = draft.title,
+                    artist = draft.artist,
+                    album = draft.album,
+                    genre = draft.genre,
+                    year = draft.yearText.toIntOrNull() ?: 0,
+                    artworkUri = draft.artworkUri
+                )
+                editingTrack = null
+                metadataDraft = null
             }
         )
     }
@@ -1053,6 +1230,7 @@ private fun SongListView(
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
     onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
+    onEditMetadata: (MusicTrackEntity) -> Unit,
 ) {
     TrackCollectionView(
         tracks = tracks,
@@ -1062,6 +1240,7 @@ private fun SongListView(
         onAddToPlaylist = onAddToPlaylist,
         onToggleLike = onToggleLike,
         onDelete = onDelete,
+        onEditMetadata = onEditMetadata,
     )
 }
 
@@ -1502,6 +1681,7 @@ private fun TrackCollectionView(
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
     onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
+    onEditMetadata: (MusicTrackEntity) -> Unit = {},
 ) {
     if (viewMode == MusicLibraryViewMode.Grid) {
         TrackGrid(
@@ -1517,6 +1697,7 @@ private fun TrackCollectionView(
             onAddToPlaylist = onAddToPlaylist,
             onToggleLike = onToggleLike,
             onDelete = onDelete,
+            onEditMetadata = onEditMetadata,
         )
     }
 }
@@ -1719,6 +1900,7 @@ private fun TrackList(
     onAddToPlaylist: (MusicTrackEntity) -> Unit,
     onToggleLike: (MusicTrackEntity) -> Unit,
     onDelete: (MusicTrackEntity) -> Unit,
+    onEditMetadata: (MusicTrackEntity) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1732,7 +1914,8 @@ private fun TrackList(
                 onPlay = { onPlay(track) },
                 onAddToPlaylist = { onAddToPlaylist(track) },
                 onToggleLike = { onToggleLike(track) },
-                onDelete = { onDelete(track) }
+                onDelete = { onDelete(track) },
+                onEditMetadata = { onEditMetadata(track) },
             )
         }
     }
@@ -1746,8 +1929,9 @@ private fun TrackRow(
     onAddToPlaylist: () -> Unit,
     onToggleLike: () -> Unit,
     onDelete: () -> Unit,
+    onEditMetadata: () -> Unit = {},
 ) {
-    LibraryListCard(onClick = onPlay) {
+    LibraryListCard(onClick = onPlay, onLongClick = onEditMetadata) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -1808,6 +1992,7 @@ private fun TrackRow(
 @Composable
 private fun LibraryListCard(
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Box(
@@ -1816,11 +2001,124 @@ private fun LibraryListCard(
             .clip(RoundedCornerShape(16.dp))
             .background(MusicScreenColors.RowFill)
             .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(16.dp))
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                when {
+                    onClick != null && onLongClick != null -> Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                    onClick != null -> Modifier.clickable(onClick = onClick)
+                    else -> Modifier
+                }
+            )
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         content()
     }
+}
+
+@Composable
+private fun EditSongMetadataScreen(
+    track: MusicTrackEntity,
+    draft: SongMetadataDraft,
+    onUpdateDraft: (SongMetadataDraft) -> Unit,
+    onPickArtwork: () -> Unit,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MusicScreenColors.BackgroundTop,
+                        MusicScreenColors.BackgroundBottom
+                    )
+                )
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = MusicScreenColors.TextSecondary)
+            }
+            Button(onClick = onSave) {
+                Text("Save")
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .clip(RoundedCornerShape(20.dp))
+                .background(MusicScreenColors.PanelFill)
+                .border(1.dp, MusicScreenColors.Border, RoundedCornerShape(20.dp))
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Edit Song Details",
+                color = MusicScreenColors.TextPrimary,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Long-press from Songs list to customize metadata.",
+                color = MusicScreenColors.TextMuted,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MusicAlbumArtwork(
+                    artworkPath = draft.artworkUri?.toString() ?: track.artworkPath,
+                    title = draft.title,
+                    modifier = Modifier.size(92.dp),
+                    cornerRadius = 14.dp
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                TextButton(onClick = onPickArtwork) {
+                    Text("Change album art", color = MusicScreenColors.Accent)
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            SongMetaField("Title", draft.title) { onUpdateDraft(draft.copy(title = it)) }
+            SongMetaField("Artist", draft.artist) { onUpdateDraft(draft.copy(artist = it)) }
+            SongMetaField("Album", draft.album) { onUpdateDraft(draft.copy(album = it)) }
+            SongMetaField("Genre", draft.genre) { onUpdateDraft(draft.copy(genre = it)) }
+            SongMetaField("Year", draft.yearText) { onUpdateDraft(draft.copy(yearText = it)) }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun SongMetaField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = MusicScreenColors.TextPrimary,
+            unfocusedTextColor = MusicScreenColors.TextPrimary,
+            focusedBorderColor = MusicScreenColors.Accent,
+            unfocusedBorderColor = MusicScreenColors.Border,
+            cursorColor = MusicScreenColors.Accent,
+            focusedLabelColor = MusicScreenColors.Accent,
+            unfocusedLabelColor = MusicScreenColors.TextMuted
+        )
+    )
 }
 
 @Composable
@@ -1909,6 +2207,7 @@ private fun PlaylistTrackWithSong.toMusicTrackEntity(): MusicTrackEntity {
         artist = artist,
         album = album,
         genre = genre,
+        year = year,
         durationMs = durationMs,
         trackNumber = trackNumber,
         discNumber = discNumber,

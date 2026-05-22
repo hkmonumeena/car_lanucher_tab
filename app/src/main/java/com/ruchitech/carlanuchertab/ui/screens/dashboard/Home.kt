@@ -14,6 +14,7 @@ import android.os.Looper
 import android.util.Log
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -72,9 +73,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -99,6 +102,7 @@ import com.ruchitech.carlanuchertab.helper.MusicNotificationListener
 import com.ruchitech.carlanuchertab.helper.NavItem
 import com.ruchitech.carlanuchertab.helper.WidgetMenuAction
 import com.ruchitech.carlanuchertab.helper.isNotificationListenerEnabled
+import com.ruchitech.carlanuchertab.music.MusicViewModel
 import com.ruchitech.carlanuchertab.rememberVehicleLocationState
 import com.ruchitech.carlanuchertab.roomdb.data.FuelLog
 import com.ruchitech.carlanuchertab.roomdb.data.FuelQuickFillHints
@@ -113,6 +117,13 @@ import com.ruchitech.carlanuchertab.ui.composables.MusicUi
 import com.ruchitech.carlanuchertab.ui.composables.WidgetsDropdownMenu
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.DashboardViewModel
 import com.ruchitech.carlanuchertab.ui.screens.dashboard.dashboard.FuelLogs
+import androidx.palette.graphics.Palette
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -147,10 +158,12 @@ fun DeleteConfirmationDialog(
 @Composable
 fun HomeScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
+    musicViewModel: MusicViewModel = hiltViewModel(),
     onNavigated: (bottomNavItem: NavItem) -> Unit,
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState
+    val musicPlayerState by musicViewModel.playerState.collectAsState()
     val fuelLogs by viewModel.fuelLogs.collectAsState()
     val fuelQuickFillHints = remember(fuelLogs) {
         val last = fuelLogs.firstOrNull()
@@ -165,6 +178,50 @@ fun HomeScreen(
     var deleteDialog by remember { mutableStateOf(false) }
     var itemToDelete: FuelLog? by remember { mutableStateOf(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    var dynamicPanelTop by remember { mutableStateOf(Color(0xE6101820)) }
+    var dynamicPanelBottom by remember { mutableStateOf(Color(0xD8141E2A)) }
+
+    fun dimColor(color: Int, factor: Float): Color {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(color, hsv)
+        hsv[2] = (hsv[2] * factor).coerceIn(0f, 1f)
+        hsv[1] = (hsv[1] * 0.85f).coerceIn(0f, 1f)
+        return Color(android.graphics.Color.HSVToColor(hsv))
+    }
+
+    LaunchedEffect(musicPlayerState.currentTrack?.artworkPath) {
+        val artworkPath = musicPlayerState.currentTrack?.artworkPath
+        if (artworkPath.isNullOrBlank()) {
+            dynamicPanelTop = Color(0xE6101820)
+            dynamicPanelBottom = Color(0xD8141E2A)
+            return@LaunchedEffect
+        }
+
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val loader = context.imageLoader
+                val request = ImageRequest.Builder(context)
+                    .data(File(artworkPath))
+                    .allowHardware(false)
+                    .build()
+                val result = loader.execute(request)
+                if (result is SuccessResult) {
+                    val bitmap = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                        ?: return@runCatching
+                    val palette = Palette.from(bitmap).generate()
+                    val dominant = palette.getDominantColor(Color(0xFF101820).toArgb())
+                    dynamicPanelTop = dimColor(dominant, 0.26f).copy(alpha = 0.88f)
+                    dynamicPanelBottom = dimColor(dominant, 0.18f).copy(alpha = 0.84f)
+                }
+            }.onFailure {
+                dynamicPanelTop = Color(0xE6101820)
+                dynamicPanelBottom = Color(0xD8141E2A)
+            }
+        }
+    }
+
+    val panelTopAnimated by animateColorAsState(dynamicPanelTop, label = "homeMusicPanelTop")
+    val panelBottomAnimated by animateColorAsState(dynamicPanelBottom, label = "homeMusicPanelBottom")
     //val kmhSpeed = speed * 3.6f // Convert m/s to km/h
     //var currentSpeed by remember { mutableStateOf(locationState.speed * 3.6f) } // Default dummy value
     val configureLauncher = rememberLauncherForActivityResult(
@@ -390,10 +447,20 @@ fun HomeScreen(
                         .weight(1f)
                         .fillMaxSize()
                 ) {
-                    MusicUi(
-                        modifier = Modifier.fillMaxSize(),
-                        onOpenLibrary = { onNavigated(NavItem.Music) }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(panelTopAnimated, panelBottomAnimated)
+                                )
+                            )
+                    ) {
+                        MusicUi(
+                            modifier = Modifier.fillMaxSize(),
+                            onOpenLibrary = { onNavigated(NavItem.Music) }
+                        )
+                    }
                 }
             }
 

@@ -128,6 +128,9 @@ interface MusicDao {
     @Query("SELECT * FROM music_tracks WHERE uri = :trackUri LIMIT 1")
     suspend fun getTrack(trackUri: String): MusicTrackEntity?
 
+    @Update
+    suspend fun updateTrack(track: MusicTrackEntity)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<MusicTrackEntity>)
 

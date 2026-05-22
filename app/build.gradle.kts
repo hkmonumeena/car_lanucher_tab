@@ -88,6 +88,7 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.1.0")
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-session:1.4.1")
+    implementation("net.jthink:jaudiotagger:3.0.1")
 
 }
 // Add this to enable annotation processing with Hilt

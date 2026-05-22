@@ -2,8 +2,13 @@ package com.ruchitech.carlanuchertab.music
 
 import android.Manifest
 import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Rect
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -13,6 +18,7 @@ import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.text.isNullOrBlank
@@ -20,6 +26,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import org.jaudiotagger.audio.AudioFileIO
+import org.jaudiotagger.tag.FieldKey
+import org.jaudiotagger.tag.images.ArtworkFactory
+import androidx.core.graphics.createBitmap
 
 @Singleton
 class MusicRepository @Inject constructor(
@@ -297,6 +307,153 @@ class MusicRepository @Inject constructor(
         Result.success(Unit)
     }
 
+    suspend fun updateTrackMetadata(trackUri: String, metadata: TrackMetadataUpdate): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val track = musicDao.getTrack(trackUri)
+                ?: return@withContext Result.failure(
+                    IllegalStateException("Track no longer exists.")
+                )
+
+            val normalizedTitle = metadata.title.trim().ifBlank { track.displayName }
+            val normalizedArtist = metadata.artist.trim().ifBlank { "Unknown Artist" }
+            val normalizedAlbum = metadata.album.trim().ifBlank { "Unknown Album" }
+            val normalizedGenre = metadata.genre.trim().ifBlank { "Unknown Genre" }
+            val normalizedYear = metadata.year.coerceIn(0, 9999)
+            val targetArtworkPath = metadata.artworkPath ?: track.artworkPath
+
+            writeEmbeddedTags(
+                trackUri = trackUri,
+                sourceExtension = resolveAudioExtension(track),
+                title = normalizedTitle,
+                artist = normalizedArtist,
+                album = normalizedAlbum,
+                genre = normalizedGenre,
+                year = normalizedYear,
+                artworkPath = targetArtworkPath
+            ).getOrElse { error ->
+                return@withContext Result.failure(
+                    IllegalStateException(
+                        "Unable to write embedded audio tags. ${error.message ?: "Check file permissions and format support."}"
+                    )
+                )
+            }
+
+            val updatedTrack = track.copy(
+                title = normalizedTitle,
+                artist = normalizedArtist,
+                album = normalizedAlbum,
+                genre = normalizedGenre,
+                year = normalizedYear,
+                artworkPath = targetArtworkPath
+            )
+            musicDao.updateTrack(updatedTrack)
+            if (!metadata.artworkPath.isNullOrBlank() && metadata.artworkPath != track.artworkPath) {
+                track.artworkPath?.let { previousPath ->
+                    File(previousPath).takeIf { it.exists() }?.delete()
+                }
+            }
+
+            if (trackUri.startsWith(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI.toString())) {
+                runCatching {
+                    context.contentResolver.update(
+                        Uri.parse(trackUri),
+                        ContentValues().apply {
+                            put(MediaStore.Audio.Media.TITLE, normalizedTitle)
+                            put(MediaStore.Audio.Media.ARTIST, normalizedArtist)
+                            put(MediaStore.Audio.Media.ALBUM, normalizedAlbum)
+                            put(MediaStore.Audio.Media.YEAR, normalizedYear)
+                        },
+                        null,
+                        null
+                    )
+                    Unit
+                }
+            }
+
+            Result.success(Unit)
+        }
+
+    private fun writeEmbeddedTags(
+        trackUri: String,
+        sourceExtension: String,
+        title: String,
+        artist: String,
+        album: String,
+        genre: String,
+        year: Int,
+        artworkPath: String?,
+    ): Result<Unit> {
+        val sourceUri = Uri.parse(trackUri)
+        val tempDir = File(context.cacheDir, "music_tag_edit").apply { mkdirs() }
+        val safeExt = sourceExtension.lowercase().ifBlank { "mp3" }
+        val sourceFile = File(tempDir, "${UUID.randomUUID()}_source.$safeExt")
+        val outputFile = File(tempDir, "${UUID.randomUUID()}_output.$safeExt")
+
+        return runCatching {
+            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                FileOutputStream(sourceFile).use { output -> input.copyTo(output) }
+            } ?: throw IllegalStateException("Unable to read source audio file.")
+
+            sourceFile.copyTo(outputFile, overwrite = true)
+            val audioFile = AudioFileIO.read(outputFile)
+            val tag = audioFile.tagOrCreateAndSetDefault
+            tag.setField(FieldKey.TITLE, title)
+            tag.setField(FieldKey.ARTIST, artist)
+            tag.setField(FieldKey.ALBUM, album)
+            tag.setField(FieldKey.GENRE, genre)
+            if (year > 0) {
+                tag.setField(FieldKey.YEAR, year.toString())
+            } else {
+                tag.deleteField(FieldKey.YEAR)
+            }
+            tag.deleteArtworkField()
+            if (!artworkPath.isNullOrBlank()) {
+                val artFile = File(artworkPath)
+                if (artFile.exists()) {
+                    tag.setField(ArtworkFactory.createArtworkFromFile(artFile))
+                }
+            }
+            AudioFileIO.write(audioFile)
+
+            val writeMode = "rwt"
+            val outputStream = context.contentResolver.openOutputStream(sourceUri, writeMode)
+                ?: context.contentResolver.openOutputStream(sourceUri, "wt")
+                ?: throw IllegalStateException("Unable to open destination for writing.")
+            outputStream.use { output ->
+                outputFile.inputStream().use { input ->
+                    input.copyTo(output)
+                }
+            }
+            Unit
+        }.also {
+            sourceFile.delete()
+            outputFile.delete()
+        }
+    }
+
+    private fun resolveAudioExtension(track: MusicTrackEntity): String {
+        val fromDisplay = track.displayName
+            .substringAfterLast('.', "")
+            .trim()
+            .lowercase()
+        if (fromDisplay.isNotBlank()) return fromDisplay
+
+        val fromMime = track.mimeType
+            ?.substringAfter('/', "")
+            ?.substringBefore('+')
+            ?.trim()
+            ?.lowercase()
+            .orEmpty()
+        val normalizedFromMime = when (fromMime) {
+            "mpeg", "mpg", "mpga" -> "mp3"
+            "x-flac" -> "flac"
+            "x-wav" -> "wav"
+            "x-m4a" -> "m4a"
+            else -> fromMime
+        }
+        return normalizedFromMime.ifBlank { "mp3" }
+    }
+
     private suspend fun touchPlaylist(playlistId: Long) {
         val playlist = musicDao.getPlaylist(playlistId) ?: return
         musicDao.updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
@@ -314,6 +471,7 @@ class MusicRepository @Inject constructor(
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.YEAR,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.MIME_TYPE,
@@ -336,6 +494,7 @@ class MusicRepository @Inject constructor(
             val artistIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val albumIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val yearIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
             val trackIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
             val mimeTypeIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
             val sizeIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
@@ -358,6 +517,7 @@ class MusicRepository @Inject constructor(
                             artist = cursor.getString(artistIndex).normalizedOr("Unknown Artist"),
                             album = cursor.getString(albumIndex).normalizedOr("Unknown Album"),
                             genre = "Unknown Genre",
+                            year = cursor.getInt(yearIndex).coerceAtLeast(0),
                             durationMs = cursor.getLong(durationIndex),
                             trackNumber = cursor.getInt(trackIndex).coerceAtLeast(0),
                             discNumber = 0,
@@ -394,6 +554,7 @@ class MusicRepository @Inject constructor(
             val rawGenre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
             val rawDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
             val rawTrack = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+            val rawYear = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
 
             val embeddedPicture = retriever.embeddedPicture
             MusicTrackEntity(
@@ -403,6 +564,7 @@ class MusicRepository @Inject constructor(
                 artist = rawArtist.normalizedOr("Unknown Artist"),
                 album = rawAlbum.normalizedOr("Unknown Album"),
                 genre = rawGenre.normalizedOr("Unknown Genre"),
+                year = parseNumericMetadata(rawYear).coerceAtLeast(0),
                 durationMs = rawDuration?.toLongOrNull() ?: 0L,
                 trackNumber = parseNumericMetadata(rawTrack),
                 discNumber = readDiscNumber(retriever),
@@ -433,12 +595,51 @@ class MusicRepository @Inject constructor(
 
     private fun cacheArtwork(trackUri: String, imageBytes: ByteArray?): String? {
         if (imageBytes == null || imageBytes.isEmpty()) return null
+        val scaledImageBytes = scaleArtworkBytes(imageBytes) ?: return null
         val artworkDirectory = File(context.cacheDir, "music_artwork").apply { mkdirs() }
         val artworkFile = File(artworkDirectory, "${trackUri.hashCode().toUInt().toString(16)}.jpg")
         FileOutputStream(artworkFile).use { stream ->
-            stream.write(imageBytes)
+            stream.write(scaledImageBytes)
         }
         return artworkFile.absolutePath
+    }
+
+    fun cacheCustomArtwork(trackUri: String, sourceUri: Uri): String? {
+        return runCatching {
+            val bytes = context.contentResolver.openInputStream(sourceUri)?.use { it.readBytes() } ?: return null
+            cacheArtwork(trackUri, bytes)
+        }.getOrNull()
+    }
+
+    private fun scaleArtworkBytes(
+        bytes: ByteArray,
+        targetWidth: Int = 600,
+        targetHeight: Int = 600,
+    ): ByteArray? {
+        val source = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        val width = source.width
+        val height = source.height
+        if (width <= 0 || height <= 0) return null
+
+        val output = createBitmap(targetWidth, targetHeight)
+        val canvas = Canvas(output)
+
+        canvas.drawBitmap(
+            source,
+            Rect(0, 0, width, height),
+            Rect(0, 0, targetWidth, targetHeight),
+            null
+        )
+
+        return try {
+            java.io.ByteArrayOutputStream().use { stream ->
+                output.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+                stream.toByteArray()
+            }
+        } finally {
+            source.recycle()
+            output.recycle()
+        }
     }
 
     private fun parseNumericMetadata(value: String?): Int {

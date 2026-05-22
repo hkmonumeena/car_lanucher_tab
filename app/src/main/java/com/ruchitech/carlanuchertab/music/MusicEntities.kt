@@ -40,6 +40,7 @@ data class MusicTrackEntity(
     val artist: String,
     val album: String,
     val genre: String,
+    val year: Int = 0,
     val durationMs: Long,
     val trackNumber: Int,
     val discNumber: Int,
@@ -136,6 +137,7 @@ data class PlaylistTrackWithSong(
     val artist: String,
     val album: String,
     val genre: String,
+    val year: Int,
     val durationMs: Long,
     val trackNumber: Int,
     val discNumber: Int,
@@ -145,6 +147,15 @@ data class PlaylistTrackWithSong(
     val lastModified: Long,
     val isAvailable: Boolean,
     val playlistPosition: Int,
+)
+
+data class TrackMetadataUpdate(
+    val title: String,
+    val artist: String,
+    val album: String,
+    val genre: String,
+    val year: Int,
+    val artworkPath: String?,
 )
 
 @Entity(tableName = "music_playback_prefs")

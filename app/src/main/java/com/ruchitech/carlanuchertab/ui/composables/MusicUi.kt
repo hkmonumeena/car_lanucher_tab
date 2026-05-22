@@ -491,7 +491,7 @@ fun MusicAlbumArtwork(
         AsyncImage(
             model = artworkPath?.let(::File),
             contentDescription = title,
-            contentScale = if (hasArtwork) ContentScale.Crop else ContentScale.Fit,
+            contentScale = ContentScale.Fit,
             placeholder = androidx.compose.ui.res.painterResource(R.drawable.music),
             error = androidx.compose.ui.res.painterResource(R.drawable.music),
             modifier = Modifier

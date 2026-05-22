@@ -60,7 +60,7 @@ abstract class AppDatabase : RoomDatabase() {
         MusicPlaybackPrefsEntity::class,
         TrackPlayStatsEntity::class,
     ],
-    version = 6
+    version = 7
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -92,6 +92,14 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
             database.execSQL("UPDATE fuel_logs SET loggedAtEpochMs = $ms WHERE id = $id")
         }
         cursor.close()
+    }
+}
+
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE music_tracks ADD COLUMN year INTEGER NOT NULL DEFAULT 0"
+        )
     }
 }
 
@@ -248,7 +256,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "car_launcher_db"
-        ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
     }
 
@@ -262,4 +270,3 @@ object DatabaseModule {
         return db.musicDao()
     }
 }
-
