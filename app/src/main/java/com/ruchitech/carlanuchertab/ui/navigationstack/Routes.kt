@@ -17,6 +17,12 @@ sealed class Screen {
     data object Trips : Screen()
 
     @Serializable
+    data object PhoneLink : Screen()
+
+    @Serializable
+    data object PairedDevice : Screen()
+
+    @Serializable
     data object Settings : Screen()
 
     @Serializable

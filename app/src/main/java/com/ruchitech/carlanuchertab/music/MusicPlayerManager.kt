@@ -17,6 +17,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.ruchitech.phonelink.protocol.PhoneSongMetadata
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -113,6 +114,24 @@ class MusicPlayerManager @Inject constructor(
         mainHandler.post {
             playTracksOnMain(tracks, startIndex, startPositionMs, playWhenReady)
         }
+    }
+
+    fun playPhoneStream(streamUrl: String, metadata: PhoneSongMetadata) {
+        val track = MusicTrackEntity(
+            uri = streamUrl,
+            displayName = metadata.title,
+            title = metadata.title,
+            artist = metadata.artist,
+            album = metadata.album,
+            genre = "Phone Link",
+            durationMs = metadata.durationMs,
+            trackNumber = 0,
+            discNumber = 0,
+            mimeType = metadata.mimeType,
+            lastModified = System.currentTimeMillis(),
+            isAvailable = true,
+        )
+        playTracks(listOf(track), startIndex = 0, playWhenReady = true)
     }
 
     private fun playTracksOnMain(

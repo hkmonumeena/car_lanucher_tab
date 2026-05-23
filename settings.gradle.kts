@@ -23,4 +23,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Car Lanucher Tab"
 include(":app")
+include(":shared-protocol")
+include(":companion")
  

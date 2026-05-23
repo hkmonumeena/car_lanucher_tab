@@ -11,13 +11,15 @@ sealed class NavItem(
     object Radio : NavItem(R.drawable.radio, "Radio")
     object Music : NavItem(R.drawable.music, "Music")
     object Fuel : NavItem(R.drawable.fuel_add, "Fuel")
+    object PhoneLink : NavItem(R.drawable.apps, "Phone Link")
+    object PairedDevice : NavItem(R.drawable.ic_bluetooth, "Bluetooth")
     object Settings : NavItem(R.drawable.my_settings, "Settings")
     object AllApps : NavItem(R.drawable.apps, "All Apps")
   /*  object Client : NavItem(R.drawable.apps, "Client")
     object Server : NavItem(R.drawable.apps, "Server")*/
 
     companion object {
-        val allItems = listOf(Radio, Music, Fuel, Settings, AllApps)
+        val allItems = listOf(Radio, Music, Fuel, PairedDevice, Settings, AllApps)
     }
 }
 
@@ -51,6 +53,3 @@ val wallpapers = listOf(
     R.drawable.launcher_bg9,
     R.drawable.launcher_bg10,
 )
-
-
-

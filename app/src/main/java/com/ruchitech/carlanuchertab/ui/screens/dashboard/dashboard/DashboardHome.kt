@@ -540,6 +540,14 @@ fun LauncherHomeScreen(
                         showFuelDialog = true
                     }
 
+                    is NavItem.PhoneLink -> {
+                        Toast.makeText(context, "Open Phone Link from launcher home", Toast.LENGTH_SHORT).show()
+                    }
+
+                    is NavItem.PairedDevice -> {
+                        Toast.makeText(context, "Open Paired Device from launcher home", Toast.LENGTH_SHORT).show()
+                    }
+
                     is NavItem.AllApps -> {
                         context.startActivity(
                             Intent(

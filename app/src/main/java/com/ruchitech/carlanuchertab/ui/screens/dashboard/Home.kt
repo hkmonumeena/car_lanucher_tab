@@ -717,6 +717,8 @@ fun HomeScreen(
                                     when (bottomNavItem) {
                                         NavItem.AllApps -> onNavigated(bottomNavItem)
                                         NavItem.Fuel -> onNavigated(bottomNavItem)
+                                        NavItem.PhoneLink -> onNavigated(bottomNavItem)
+                                        NavItem.PairedDevice -> onNavigated(bottomNavItem)
                                         NavItem.Map -> {}
                                         NavItem.Music -> onNavigated(bottomNavItem)
                                         NavItem.Radio -> {
